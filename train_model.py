@@ -3,7 +3,7 @@
 
 import argparse
 import logging
-from pathlib import Path
+
 from buoy_data.ml import BuoyForecaster
 
 logging.basicConfig(
