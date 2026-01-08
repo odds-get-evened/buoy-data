@@ -33,6 +33,9 @@ pip install -r requirements.txt
 - Python 3.8+
 - requests >= 2.31.0
 - sqlalchemy >= 2.0.0
+- pandas >= 2.0.0 (for ML features)
+- numpy >= 1.24.0 (for ML features)
+- scikit-learn >= 1.3.0 (for ML features)
 
 ## Quick Start
 
@@ -218,7 +221,13 @@ buoy_data/
 ├── station.py            # Station information
 ├── stations_data.py      # Station database
 ├── conversions.py        # Unit conversion utilities
-└── database.py           # Database models and operations
+├── database.py           # Database models and operations
+└── ml/                   # Machine learning module
+    ├── __init__.py       # ML module initialization
+    ├── data_collector.py # Historical data collection
+    ├── feature_engineering.py  # Feature creation
+    ├── wave_predictor.py # ML models
+    └── forecaster.py     # High-level forecasting interface
 ```
 
 ## License
@@ -233,6 +242,126 @@ Rewritten in Python for modern usage
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Machine Learning Features
+
+### Wave Height Forecasting
+
+The package includes ML models for forecasting wave heights between buoy stations using ensemble methods (Random Forest, Gradient Boosting).
+
+#### Quick Start - ML
+
+**Train a model:**
+```bash
+python train_model.py --buoys 44017 44008 44013 44025 --days 7
+```
+
+**Make predictions:**
+```bash
+python predict.py --buoys 44017 44008 --model models/wave_predictor.pkl --mode forecast
+```
+
+#### Python API
+
+**Train a forecasting model:**
+```python
+from buoy_data.ml import BuoyForecaster
+
+# Initialize and train
+forecaster = BuoyForecaster()
+metrics = forecaster.train(
+    buoy_ids=['44017', '44008', '44013', '44025'],
+    days_back=7,
+    model_type='random_forest',
+    save_path='models/wave_predictor.pkl'
+)
+
+print(f"Model RMSE: {metrics['test_rmse']:.3f}m")
+print(f"Model R²: {metrics['test_r2']:.3f}")
+```
+
+**Query current readings:**
+```python
+from buoy_data.ml import BuoyForecaster
+
+forecaster = BuoyForecaster()
+readings = forecaster.get_current_readings(['44017', '44008'])
+print(readings)
+```
+
+**Forecast wave heights:**
+```python
+from buoy_data.ml import BuoyForecaster
+
+forecaster = BuoyForecaster(model_path='models/wave_predictor.pkl')
+
+# Forecast for multiple buoys
+forecast = forecaster.forecast_between_buoys(['44017', '44008', '44013'])
+print(forecast[['buoy_id', 'predicted_wave_height_m', 'predicted_wave_height_ft']])
+
+# Get regional summary
+summary = forecaster.get_regional_summary(['44017', '44008', '44013'])
+print(f"Mean wave height: {summary['predicted']['mean_wave_height_m']:.2f}m")
+print(f"Max wave height: {summary['predicted']['max_wave_height_m']:.2f}m")
+```
+
+**Single buoy prediction:**
+```python
+result = forecaster.predict_wave_height('44017')
+print(f"Predicted: {result['predicted_wave_height_m']:.2f}m")
+print(f"95% CI: [{result['confidence']['lower_95']:.2f}, {result['confidence']['upper_95']:.2f}]m")
+```
+
+### ML Features
+
+The forecasting model uses:
+- **Spatial features**: Buoy locations, depth, inter-buoy distances
+- **Temporal features**: Hour of day, day of year (cyclical encoding)
+- **Meteorological features**: Wind speed/direction, barometric pressure, temperature
+- **Lag features**: Historical values (1h, 3h, 6h, 12h, 24h)
+- **Rolling statistics**: Moving averages and standard deviations
+- **Inter-buoy relationships**: Weighted averages from nearby buoys
+
+### ML API Reference
+
+#### BuoyForecaster
+
+High-level interface for wave height forecasting.
+
+**Methods:**
+- `train(buoy_ids, days_back, model_type, save_path)` - Train a new model
+- `get_current_readings(buoy_ids)` - Get real-time buoy data
+- `predict_wave_height(buoy_id, current_conditions)` - Predict single buoy
+- `forecast_between_buoys(buoy_ids)` - Forecast multiple buoys
+- `get_regional_summary(buoy_ids)` - Get regional statistics
+
+#### DataCollector
+
+Collects historical and real-time data for training.
+
+**Methods:**
+- `collect_current_data(buoy_ids)` - Fetch current readings
+- `collect_hourly_data(buoy_ids, hr_from, hr_to)` - Fetch hourly data
+- `collect_training_dataset(buoy_ids, days_back)` - Build training dataset
+- `load_from_database(buoy_ids, start_timestamp, end_timestamp)` - Load stored data
+
+#### WaveHeightPredictor
+
+ML model for wave height prediction.
+
+**Methods:**
+- `train(df, target_col, test_size, cv_folds)` - Train the model
+- `predict(df)` - Make predictions
+- `predict_with_confidence(df)` - Predictions with confidence intervals
+- `save(filepath)` - Save trained model
+- `load(filepath)` - Load trained model
+
+### ML Examples
+
+See `examples_ml.py` for complete examples:
+```bash
+python examples_ml.py
+```
 
 ## Links
 
