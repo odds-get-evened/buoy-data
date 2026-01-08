@@ -141,13 +141,18 @@ class BuoyForecaster:
         else:
             current_data = pd.DataFrame([current_conditions])
 
-        # Prepare features
+        # Prepare features (without lag/rolling since we don't have historical data)
         prepared_data = self.feature_engineer.prepare_features(
             current_data,
             add_lags=False,  # Can't compute lags for single point
             add_rolling=False,
             add_inter_buoy=False
         )
+
+        # Ensure all required features are present, fill missing with 0
+        for col in self.predictor.feature_columns:
+            if col not in prepared_data.columns:
+                prepared_data[col] = 0.0
 
         # Make prediction
         prediction = self.predictor.predict(prepared_data)[0]
@@ -210,13 +215,18 @@ class BuoyForecaster:
         if current_data.empty:
             raise ValueError("No current data available for specified buoys")
 
-        # Prepare features
+        # Prepare features (without lag/rolling since we don't have historical data)
         prepared_data = self.feature_engineer.prepare_features(
             current_data,
             add_lags=False,
             add_rolling=False,
             add_inter_buoy=True  # Important for spatial relationships
         )
+
+        # Ensure all required features are present, fill missing with 0
+        for col in self.predictor.feature_columns:
+            if col not in prepared_data.columns:
+                prepared_data[col] = 0.0
 
         # Make predictions
         predictions = self.predictor.predict(prepared_data)
