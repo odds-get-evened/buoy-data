@@ -120,15 +120,22 @@ class FeatureEngineer:
         df = df.copy()
 
         if 'wind_direction_deg' in df.columns:
+            # Convert to numeric, replacing non-numeric with NaN
+            df['wind_direction_deg'] = pd.to_numeric(df['wind_direction_deg'], errors='coerce')
             # Cyclical encoding for wind direction
             df['wind_dir_sin'] = np.sin(2 * np.pi * df['wind_direction_deg'] / 360)
             df['wind_dir_cos'] = np.cos(2 * np.pi * df['wind_direction_deg'] / 360)
 
         if 'wind_speed' in df.columns and 'gusts' in df.columns:
+            # Convert to numeric
+            df['wind_speed'] = pd.to_numeric(df['wind_speed'], errors='coerce')
+            df['gusts'] = pd.to_numeric(df['gusts'], errors='coerce')
             # Gust factor (ratio of gusts to wind speed)
             df['gust_factor'] = df['gusts'] / (df['wind_speed'] + 0.1)
 
         if 'mean_wave_direction_deg' in df.columns:
+            # Convert to numeric
+            df['mean_wave_direction_deg'] = pd.to_numeric(df['mean_wave_direction_deg'], errors='coerce')
             # Cyclical encoding for wave direction
             df['wave_dir_sin'] = np.sin(2 * np.pi * df['mean_wave_direction_deg'] / 360)
             df['wave_dir_cos'] = np.cos(2 * np.pi * df['mean_wave_direction_deg'] / 360)
@@ -293,6 +300,16 @@ class FeatureEngineer:
             DataFrame with all features prepared
         """
         df = df.copy()
+
+        # Convert all numeric columns to proper numeric types
+        numeric_columns = [
+            'wave_height_m', 'wave_height_ft', 'wind_speed', 'gusts',
+            'dominant_wave_period', 'avg_wave_period', 'barometer',
+            'air_temp_c', 'water_temp_c', 'dewpoint_c', 'timestamp'
+        ]
+        for col in numeric_columns:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
 
         # Add spatial features
         df = self.add_spatial_features(df)
