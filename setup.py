@@ -30,6 +30,9 @@ setup(
     install_requires=[
         "requests>=2.31.0",
         "sqlalchemy>=2.0.0",
+        "pandas>=2.0.0",
+        "numpy>=1.24.0",
+        "scikit-learn>=1.3.0",
     ],
     extras_require={
         "dev": [
