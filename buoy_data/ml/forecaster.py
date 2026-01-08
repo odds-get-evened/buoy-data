@@ -252,6 +252,13 @@ class BuoyForecaster:
         if include_current:
             current_heights = current_data[['buoy_id', 'wave_height_m']].copy()
             current_heights.columns = ['buoy_id', 'actual_wave_height_m']
+
+            # Convert to numeric to handle any string values
+            current_heights['actual_wave_height_m'] = pd.to_numeric(
+                current_heights['actual_wave_height_m'],
+                errors='coerce'
+            )
+
             results = results.merge(current_heights, on='buoy_id', how='left')
 
             # Calculate errors where actual data exists
