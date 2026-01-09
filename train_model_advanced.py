@@ -9,6 +9,7 @@ import numpy as np
 
 from buoy_data.ml import BuoyForecaster
 from buoy_data.ml.wave_predictor import WaveHeightPredictor
+from buoy_data.utils import get_available_stations, filter_stations_by_region
 
 logging.basicConfig(
     level=logging.INFO,
@@ -72,8 +73,19 @@ def main():
     parser.add_argument(
         '--buoys',
         nargs='+',
-        default=['44017', '44008', '44013', '44025', '44065', '44066'],
+        default=None,
         help='List of buoy station IDs to train on (more buoys = better)'
+    )
+    parser.add_argument(
+        '--all-stations',
+        action='store_true',
+        help='Use all available stations from NOAA realtime2 directory'
+    )
+    parser.add_argument(
+        '--region',
+        type=str,
+        choices=['northeast', 'southeast', 'caribbean', 'pacific', 'greatlakes', 'hawaii'],
+        help='Filter stations by region (use with --all-stations)'
     )
     parser.add_argument(
         '--days',
@@ -106,6 +118,26 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Determine which buoys to use
+    if args.all_stations:
+        try:
+            buoys = get_available_stations()
+            if args.region:
+                buoys = filter_stations_by_region(buoys, args.region)
+            logger.info(f"Using all available stations: {len(buoys)} buoys")
+        except Exception as e:
+            logger.error(f"Failed to fetch available stations: {e}")
+            logger.info("Falling back to default buoys")
+            buoys = ['44017', '44008', '44013', '44025', '44065', '44066']
+    elif args.buoys:
+        buoys = args.buoys
+    else:
+        # Default buoys if neither flag is specified
+        buoys = ['44017', '44008', '44013', '44025', '44065', '44066']
+        logger.info("Using default buoys (use --all-stations to train on all available stations)")
+
+    args.buoys = buoys
 
     logger.info("="*70)
     logger.info("ADVANCED BUOY WAVE HEIGHT FORECASTING - MODEL TRAINING")
