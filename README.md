@@ -534,18 +534,27 @@ python train_model.py [OPTIONS]
 
 **Options:**
 - `--buoys BUOY_ID [BUOY_ID ...]` - List of buoy station IDs (default: 44017 44008 44013 44025)
+- `--all-stations` - Use all available stations from NOAA realtime2 directory
+- `--region {northeast,southeast,caribbean,pacific,greatlakes,hawaii}` - Filter by region (use with --all-stations)
 - `--days N` - Number of days of historical data (default: 7)
 - `--model-type {random_forest,gradient_boosting}` - Model type (default: random_forest)
 - `--output PATH` - Path to save trained model (default: models/wave_predictor.pkl)
 - `--db CONNECTION_STRING` - Database connection string (default: sqlite:///buoy_ml_data.db)
 
-**Example:**
+**Examples:**
 ```bash
+# Train with specific buoys
 python train_model.py \
     --buoys 44017 44008 44013 44025 \
     --days 7 \
     --model-type random_forest \
     --output models/my_model.pkl
+
+# Train with all available stations
+python train_model.py --all-stations --days 7
+
+# Train with all Northeast Atlantic stations
+python train_model.py --all-stations --region northeast --days 7
 ```
 
 #### train_model_advanced.py
@@ -559,6 +568,8 @@ python train_model_advanced.py [OPTIONS]
 
 **Options:**
 - `--buoys BUOY_ID [BUOY_ID ...]` - List of buoy station IDs (default: 44017 44008 44013 44025 44065 44066)
+- `--all-stations` - Use all available stations from NOAA realtime2 directory
+- `--region {northeast,southeast,caribbean,pacific,greatlakes,hawaii}` - Filter by region (use with --all-stations)
 - `--days N` - Number of days of historical data (default: 14, recommended: 21+)
 - `--tune` - Enable hyperparameter tuning with RandomizedSearchCV (slower but better)
 - `--model-type {random_forest,gradient_boosting}` - Model type (default: random_forest)
@@ -578,6 +589,12 @@ python train_model_advanced.py \
     --buoys 44017 44008 44013 \
     --days 14 \
     --output models/northeast_predictor.pkl
+
+# Train with ALL available stations (comprehensive model)
+python train_model_advanced.py --all-stations --days 14
+
+# Train with all Pacific region stations
+python train_model_advanced.py --all-stations --region pacific --days 14 --tune
 ```
 
 **Performance Tips:**
@@ -642,6 +659,58 @@ python predict.py --buoys 44017 44008 44013 --mode forecast
 # Regional summary
 python predict.py --buoys 44017 44008 44013 44025 --mode summary
 ```
+
+### Station Discovery and Region Filtering
+
+The package includes utilities to automatically discover all available buoy stations from NOAA's real-time data feeds.
+
+#### Using Python API
+
+```python
+from buoy_data import get_available_stations, filter_stations_by_region
+
+# Get all available stations
+all_stations = get_available_stations()
+print(f"Found {len(all_stations)} active stations")
+
+# Filter by region
+northeast = filter_stations_by_region(all_stations, 'northeast')
+pacific = filter_stations_by_region(all_stations, 'pacific')
+```
+
+#### Region Mapping
+
+Station IDs use prefixes to indicate geographic regions:
+
+- **northeast** (44xxx) - Northeast North Atlantic (New England, Mid-Atlantic)
+- **southeast** (42xxx) - Southeast North Atlantic (South Atlantic Coast)
+- **caribbean** (41xxx) - Southwest North Atlantic (Caribbean, Gulf of Mexico)
+- **pacific** (46xxx) - Northeast Pacific (West Coast, Alaska)
+- **greatlakes** (45xxx) - Great Lakes
+- **hawaii** (51xxx) - Southwest Pacific (Hawaiian Islands)
+
+#### Training with All Stations
+
+Using `--all-stations` automatically trains on all buoys with available data:
+
+```bash
+# Train on ALL available stations (200+ buoys)
+python train_model_advanced.py --all-stations --days 14
+
+# Train on all Northeast stations (40+ buoys)
+python train_model_advanced.py --all-stations --region northeast --days 14
+```
+
+**Benefits:**
+- Maximum spatial coverage for better predictions
+- No need to manually track active stations
+- Automatically adapts to station availability
+- Better model generalization across regions
+
+**Considerations:**
+- More stations = longer training time
+- Some stations may have incomplete data (handled gracefully)
+- Regional models often perform better than global models
 
 ### Common Buoy Stations (US East Coast)
 
