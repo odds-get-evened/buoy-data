@@ -368,6 +368,10 @@ class FeatureEngineer:
 
         X = df[feature_cols].copy()
 
+        # Convert all columns to numeric (handle any remaining strings)
+        for col in X.columns:
+            X[col] = pd.to_numeric(X[col], errors='coerce')
+
         # Fill NaN values
         X = X.fillna(X.median())
 
