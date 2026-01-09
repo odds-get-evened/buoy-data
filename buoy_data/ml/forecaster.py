@@ -268,9 +268,12 @@ class BuoyForecaster:
                 results.loc[mask, 'actual_wave_height_m']
             )
 
-        # Add spatial info
-        spatial_info = current_data[['buoy_id', 'latitude', 'longitude']].copy()
-        results = results.merge(spatial_info, on='buoy_id', how='left')
+        # Add spatial info (from prepared_data which has lat/lon added by feature engineering)
+        if 'latitude' in prepared_data.columns and 'longitude' in prepared_data.columns:
+            spatial_info = prepared_data[['buoy_id', 'latitude', 'longitude']].copy()
+            # Remove duplicates in case there are multiple rows per buoy
+            spatial_info = spatial_info.drop_duplicates(subset=['buoy_id'])
+            results = results.merge(spatial_info, on='buoy_id', how='left')
 
         logger.info(f"Generated forecasts for {len(results)} buoys")
 
