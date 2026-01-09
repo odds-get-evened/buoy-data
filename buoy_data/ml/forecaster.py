@@ -67,7 +67,8 @@ class BuoyForecaster:
         buoy_ids: List[str],
         days_back: int = 7,
         model_type: str = "random_forest",
-        save_path: Optional[str] = None
+        save_path: Optional[str] = None,
+        use_cache: bool = False
     ) -> Dict[str, float]:
         """
         Train a new forecasting model.
@@ -77,6 +78,7 @@ class BuoyForecaster:
             days_back: Number of days of historical data to collect
             model_type: Type of model ('random_forest' or 'gradient_boosting')
             save_path: Optional path to save trained model
+            use_cache: If True, use cached data from database (default: False)
 
         Returns:
             Dictionary of training metrics
@@ -87,7 +89,8 @@ class BuoyForecaster:
         logger.info("Collecting training data...")
         raw_data = self.data_collector.collect_training_dataset(
             buoy_ids,
-            days_back=days_back
+            days_back=days_back,
+            use_cache=use_cache
         )
 
         if raw_data.empty:
