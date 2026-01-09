@@ -251,14 +251,172 @@ The package includes ML models for forecasting wave heights between buoy station
 
 #### Quick Start - ML
 
-**Train a model:**
+**Basic Training:**
 ```bash
 python train_model.py --buoys 44017 44008 44013 44025 --days 7
 ```
 
-**Make predictions:**
+**Advanced Training (Recommended for better confidence):**
 ```bash
-python predict.py --buoys 44017 44008 --model models/wave_predictor.pkl --mode forecast
+# With improved default parameters
+python train_model_advanced.py --buoys 44017 44008 44013 44025 44065 44066 --days 14
+
+# With hyperparameter tuning (slower but best results)
+python train_model_advanced.py --tune --days 21 --buoys 44017 44008 44013 44025 44065 44066
+```
+
+**Analyze Model Performance:**
+```bash
+python analyze_model.py --model models/wave_predictor.pkl
+```
+
+**Make Predictions:**
+```bash
+# Current readings
+python predict.py --buoys 44017 44008 --model models/wave_predictor.pkl --mode current
+
+# Wave height forecast
+python predict.py --buoys 44017 44008 44013 --model models/wave_predictor.pkl --mode forecast
+
+# Regional summary
+python predict.py --buoys 44017 44008 44013 --model models/wave_predictor.pkl --mode summary
+```
+
+### Complete ML Workflow
+
+#### 1. Train Your Model
+
+**Option A: Basic Training (Quick)**
+```bash
+# Train with default parameters (7 days, 4 buoys)
+python train_model.py --buoys 44017 44008 44013 44025 --days 7
+```
+
+**Option B: Advanced Training (Recommended)**
+```bash
+# Train with improved parameters (14 days, 6 buoys)
+python train_model_advanced.py \
+    --buoys 44017 44008 44013 44025 44065 44066 \
+    --days 14 \
+    --output models/wave_predictor_optimized.pkl
+```
+
+**Option C: Hyperparameter Tuning (Best Quality)**
+```bash
+# Optimize model with RandomizedSearchCV (takes longer)
+python train_model_advanced.py \
+    --tune \
+    --days 21 \
+    --buoys 44017 44008 44013 44025 44065 44066 \
+    --output models/wave_predictor_tuned.pkl
+```
+
+#### 2. Analyze Model Performance
+
+After training, analyze your model to understand its performance:
+
+```bash
+python analyze_model.py --model models/wave_predictor.pkl
+```
+
+This will show:
+- **Model confidence** (R² score converted to percentage)
+- **Error metrics** (RMSE, MAE, R²)
+- **Feature importance** (top 15 features)
+- **Actionable recommendations** based on confidence level
+
+**Example output:**
+```
+======================================================================
+MODEL DIAGNOSTICS
+======================================================================
+
+Model Type: random_forest
+Number of features: 72
+
+Performance Metrics:
+  Train RMSE: 0.215m
+  Test RMSE:  0.342m
+  Test MAE:   0.267m
+  Test R²:    0.878
+  CV RMSE:    0.351 ± 0.045m
+
+✓ Model Confidence: 87.8%
+  (Based on R² = 0.878)
+
+Top 15 Most Important Features:
+  wave_height_m_lag_1h                     0.1234
+  neighbor_wave_avg                        0.0987
+  wind_speed                               0.0876
+  ...
+
+======================================================================
+RECOMMENDATIONS
+======================================================================
+
+✓✓ HIGH CONFIDENCE MODEL - Great job!
+  Model is performing well with 87.8% confidence
+
+Error Analysis:
+  Average prediction error: ±1.12 feet
+  95% of predictions within: ±2.24 feet
+  ✓ Excellent accuracy!
+======================================================================
+```
+
+**Understanding Confidence Levels:**
+- **< 70%**: Low confidence - Needs improvement (more data/tuning)
+- **70-85%**: Moderate confidence - Good for most purposes
+- **> 85%**: High confidence - Production ready
+
+#### 3. Make Predictions
+
+**Single Buoy Current Reading:**
+```bash
+python predict.py --buoys 44017 --model models/wave_predictor.pkl --mode current
+```
+
+**Multi-Buoy Forecast:**
+```bash
+python predict.py \
+    --buoys 44017 44008 44013 44025 \
+    --model models/wave_predictor.pkl \
+    --mode forecast
+```
+
+**Regional Summary:**
+```bash
+python predict.py \
+    --buoys 44017 44008 44013 44025 44065 44066 \
+    --model models/wave_predictor.pkl \
+    --mode summary
+```
+
+### Improving Model Confidence
+
+If your model has low confidence (<70%), follow these steps:
+
+**Step 1: Collect More Historical Data**
+```bash
+# Increase from 7 to 21 days
+python train_model_advanced.py --days 21 --buoys 44017 44008 44013 44025
+```
+
+**Step 2: Add More Buoy Stations**
+```bash
+# More buoys = better spatial coverage
+python train_model_advanced.py --days 14 --buoys 44017 44008 44013 44025 44065 44066 44007
+```
+
+**Step 3: Use Hyperparameter Tuning**
+```bash
+# Let the model find optimal parameters
+python train_model_advanced.py --tune --days 21 --buoys 44017 44008 44013 44025 44065 44066
+```
+
+**Step 4: Re-analyze**
+```bash
+python analyze_model.py --model models/wave_predictor_optimized.pkl
 ```
 
 #### Python API
@@ -363,7 +521,142 @@ See `examples_ml.py` for complete examples:
 python examples_ml.py
 ```
 
+### CLI Tools Reference
+
+#### train_model.py
+
+Basic training script with default parameters.
+
+**Usage:**
+```bash
+python train_model.py [OPTIONS]
+```
+
+**Options:**
+- `--buoys BUOY_ID [BUOY_ID ...]` - List of buoy station IDs (default: 44017 44008 44013 44025)
+- `--days N` - Number of days of historical data (default: 7)
+- `--model-type {random_forest,gradient_boosting}` - Model type (default: random_forest)
+- `--output PATH` - Path to save trained model (default: models/wave_predictor.pkl)
+- `--db CONNECTION_STRING` - Database connection string (default: sqlite:///buoy_ml_data.db)
+
+**Example:**
+```bash
+python train_model.py \
+    --buoys 44017 44008 44013 44025 \
+    --days 7 \
+    --model-type random_forest \
+    --output models/my_model.pkl
+```
+
+#### train_model_advanced.py
+
+Advanced training with hyperparameter tuning and improved defaults.
+
+**Usage:**
+```bash
+python train_model_advanced.py [OPTIONS]
+```
+
+**Options:**
+- `--buoys BUOY_ID [BUOY_ID ...]` - List of buoy station IDs (default: 44017 44008 44013 44025 44065 44066)
+- `--days N` - Number of days of historical data (default: 14, recommended: 21+)
+- `--tune` - Enable hyperparameter tuning with RandomizedSearchCV (slower but better)
+- `--model-type {random_forest,gradient_boosting}` - Model type (default: random_forest)
+- `--output PATH` - Path to save trained model (default: models/wave_predictor_optimized.pkl)
+- `--db CONNECTION_STRING` - Database connection string (default: sqlite:///buoy_ml_data.db)
+
+**Examples:**
+```bash
+# Quick training with improved parameters
+python train_model_advanced.py --days 14
+
+# Best quality with hyperparameter tuning
+python train_model_advanced.py --tune --days 21
+
+# Custom buoys and output path
+python train_model_advanced.py \
+    --buoys 44017 44008 44013 \
+    --days 14 \
+    --output models/northeast_predictor.pkl
+```
+
+**Performance Tips:**
+- More days = better model (recommended: 14-21 days)
+- More buoys = better spatial coverage (recommended: 6+ buoys)
+- Use `--tune` for production models (takes 5-10x longer)
+
+#### analyze_model.py
+
+Model diagnostics and performance analysis.
+
+**Usage:**
+```bash
+python analyze_model.py [OPTIONS]
+```
+
+**Options:**
+- `--model PATH` - Path to trained model (default: models/wave_predictor.pkl)
+- `--db CONNECTION_STRING` - Database connection string (default: sqlite:///buoy_ml_data.db)
+
+**Example:**
+```bash
+python analyze_model.py --model models/wave_predictor_optimized.pkl
+```
+
+**Output includes:**
+- Model type and feature count
+- Performance metrics (RMSE, MAE, R², CV scores)
+- Model confidence percentage
+- Top 15 most important features
+- Actionable recommendations
+- Error analysis with 95% confidence intervals
+
+#### predict.py
+
+Make predictions with trained models.
+
+**Usage:**
+```bash
+python predict.py --buoys BUOY_ID [BUOY_ID ...] --model PATH --mode {current,forecast,summary}
+```
+
+**Options:**
+- `--buoys BUOY_ID [BUOY_ID ...]` - List of buoy station IDs (required)
+- `--model PATH` - Path to trained model (default: models/wave_predictor.pkl)
+- `--mode {current,forecast,summary}` - Prediction mode (default: forecast)
+- `--db CONNECTION_STRING` - Database connection string (default: sqlite:///buoy_ml_data.db)
+
+**Modes:**
+- `current` - Show current readings for specified buoys
+- `forecast` - Predict wave heights with confidence intervals
+- `summary` - Regional summary with statistics and high wave alerts
+
+**Examples:**
+```bash
+# Get current readings
+python predict.py --buoys 44017 44008 --mode current
+
+# Forecast wave heights
+python predict.py --buoys 44017 44008 44013 --mode forecast
+
+# Regional summary
+python predict.py --buoys 44017 44008 44013 44025 --mode summary
+```
+
+### Common Buoy Stations (US East Coast)
+
+- **44017** - Montauk Point, NY (65 NM S)
+- **44008** - Nantucket, MA (54 NM SE)
+- **44013** - Boston, MA (16 NM E)
+- **44025** - Long Island, NY (33 NM S)
+- **44065** - New York Harbor Entrance (15 NM SE)
+- **44066** - Texas Tower #4, NY (39 NM SE)
+- **44007** - Portland, ME (12 NM SE)
+
+Find more stations at: https://www.ndbc.noaa.gov/
+
 ## Links
 
 - [NOAA National Data Buoy Center](https://www.ndbc.noaa.gov/)
 - [NDBC Data Documentation](https://www.ndbc.noaa.gov/docs/)
+- [Station Map and IDs](https://www.ndbc.noaa.gov/maps/)
