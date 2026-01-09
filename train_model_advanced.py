@@ -116,6 +116,11 @@ def main():
         default='sqlite:///buoy_ml_data.db',
         help='Database connection string'
     )
+    parser.add_argument(
+        '--use-cache',
+        action='store_true',
+        help='Use cached data from database instead of re-downloading'
+    )
 
     args = parser.parse_args()
 
@@ -157,7 +162,8 @@ def main():
             logger.info(f"\nCollecting training data from {len(args.buoys)} buoys...")
             raw_data = forecaster.data_collector.collect_training_dataset(
                 args.buoys,
-                days_back=args.days
+                days_back=args.days,
+                use_cache=args.use_cache
             )
 
             if raw_data.empty:

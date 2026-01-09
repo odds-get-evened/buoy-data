@@ -59,6 +59,11 @@ def main():
         default='sqlite:///buoy_ml_data.db',
         help='Database connection string'
     )
+    parser.add_argument(
+        '--use-cache',
+        action='store_true',
+        help='Use cached data from database instead of re-downloading'
+    )
 
     args = parser.parse_args()
 
@@ -99,7 +104,8 @@ def main():
                 buoy_ids=args.buoys,
                 days_back=args.days,
                 model_type=args.model_type,
-                save_path=args.output
+                save_path=args.output,
+                use_cache=args.use_cache
             )
 
             logger.info("\n" + "="*60)

@@ -202,21 +202,57 @@ class DataCollector:
     def collect_training_dataset(
         self,
         buoy_ids: List[str],
-        days_back: int = 7
+        days_back: int = 7,
+        use_cache: bool = False,
+        save_to_db: bool = True
     ) -> pd.DataFrame:
         """
         Collect a comprehensive training dataset.
 
         This collects both current real-time data and recent hourly data
-        to build a training dataset for ML models.
+        to build a training dataset for ML models. Can optionally use cached
+        data from the database to avoid re-downloading.
 
         Args:
             buoy_ids: List of buoy station IDs
             days_back: Number of days of historical data to collect
+            use_cache: If True, try to load from database first (default: False)
+            save_to_db: If True, save downloaded data to database (default: True)
 
         Returns:
             Combined DataFrame ready for training
         """
+        # Try to use cached data if requested
+        if use_cache:
+            logger.info("Checking database cache for existing data...")
+            end_timestamp = int(time.time())
+            start_timestamp = end_timestamp - (days_back * 86400)  # 86400 seconds per day
+
+            cached_data = self.load_from_database(
+                buoy_ids=buoy_ids,
+                start_timestamp=start_timestamp,
+                end_timestamp=end_timestamp
+            )
+
+            if not cached_data.empty:
+                logger.info(f"✓ Found {len(cached_data)} cached readings in database")
+
+                # Check if we have enough data for each buoy
+                buoy_counts = cached_data['buoy_id'].value_counts()
+                min_expected = days_back * 12  # Rough estimate: 12 readings per day
+
+                missing_buoys = [b for b in buoy_ids if buoy_counts.get(b, 0) < min_expected]
+
+                if not missing_buoys:
+                    logger.info("✓ Sufficient cached data found. Using cached data.")
+                    return cached_data
+                else:
+                    logger.info(f"⚠ Insufficient data for buoys: {missing_buoys}")
+                    logger.info("Falling back to remote data collection...")
+            else:
+                logger.info("No cached data found. Fetching from remote...")
+
+        # Fetch data from remote
         all_data = []
 
         # Collect current real-time data
@@ -247,9 +283,44 @@ class DataCollector:
             combined = combined.sort_values('timestamp')
 
             logger.info(f"Collected {len(combined)} total readings")
+
+            # Save to database if requested
+            if save_to_db:
+                self._save_to_database(combined)
+
             return combined
 
         return pd.DataFrame()
+
+    def _save_to_database(self, df: pd.DataFrame):
+        """
+        Save collected data to database for future use.
+
+        Args:
+            df: DataFrame with collected buoy data
+        """
+        logger.info("Saving data to database cache...")
+        saved_count = 0
+
+        for _, row in df.iterrows():
+            try:
+                # Check if already logged
+                if not self.db.is_logged(row['buoy_id'], int(row['timestamp'])):
+                    self.db.log_data(
+                        buoy_id=row['buoy_id'],
+                        wind_dir=float(row.get('wind_direction_deg', 0) or 0),
+                        wind_spd=float(row.get('wind_speed', 0) or 0),
+                        wave_height=float(row.get('wave_height_m', 0) or 0),
+                        water_temp=float(row.get('water_temp_c', 0) or 0),
+                        reading_time=int(row['timestamp'])
+                    )
+                    saved_count += 1
+            except Exception as e:
+                logger.debug(f"Could not save record: {e}")
+                continue
+
+        self.session.commit()
+        logger.info(f"✓ Saved {saved_count} new readings to database")
 
     def close(self):
         """Close database connection."""
