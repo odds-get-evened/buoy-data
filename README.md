@@ -217,6 +217,13 @@ python examples.py
 
 ### Running Tests
 
+For core functionality tests:
+```bash
+pip install -e ".[dev]"
+pytest tests/ --ignore=tests/test_analyze_model.py
+```
+
+For all tests (including ML):
 ```bash
 pip install -e ".[dev,ml]"
 pytest tests/
