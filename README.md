@@ -22,8 +22,20 @@ cd buoy-data
 pip install -e .
 ```
 
-### Using pip
+For ML features, install with the `ml` extras:
 
+```bash
+pip install -e ".[ml]"
+```
+
+### Using pip (with requirements.txt)
+
+Basic installation:
+```bash
+pip install requests sqlalchemy
+```
+
+For ML features:
 ```bash
 pip install -r requirements.txt
 ```
@@ -206,7 +218,7 @@ python examples.py
 ### Running Tests
 
 ```bash
-pip install -e ".[dev]"
+pip install -e ".[dev,ml]"
 pytest tests/
 ```
 
