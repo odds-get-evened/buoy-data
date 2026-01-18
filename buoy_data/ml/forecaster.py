@@ -58,7 +58,15 @@ class BuoyForecaster:
 
         Returns:
             DataFrame with current readings
+            
+        Raises:
+            ValueError: If buoy_ids is empty or invalid
         """
+        if not buoy_ids or not isinstance(buoy_ids, list):
+            raise ValueError("buoy_ids must be a non-empty list")
+        if not all(isinstance(bid, str) for bid in buoy_ids):
+            raise ValueError("All buoy_ids must be strings")
+            
         logger.info(f"Fetching current readings for {len(buoy_ids)} buoys...")
         return self.data_collector.collect_current_data(buoy_ids)
 
@@ -82,7 +90,20 @@ class BuoyForecaster:
 
         Returns:
             Dictionary of training metrics
+            
+        Raises:
+            ValueError: If parameters are invalid
         """
+        # Validate inputs
+        if not buoy_ids or not isinstance(buoy_ids, list):
+            raise ValueError("buoy_ids must be a non-empty list")
+        if not all(isinstance(bid, str) for bid in buoy_ids):
+            raise ValueError("All buoy_ids must be strings")
+        if days_back <= 0 or days_back > 365:
+            raise ValueError("days_back must be between 1 and 365")
+        if model_type not in ["random_forest", "gradient_boosting"]:
+            raise ValueError("model_type must be 'random_forest' or 'gradient_boosting'")
+            
         logger.info(f"Training model on {len(buoy_ids)} buoy stations...")
 
         # Collect training data
@@ -170,8 +191,8 @@ class BuoyForecaster:
                     'lower_95': float(prediction - 1.96 * std[0]),
                     'upper_95': float(prediction + 1.96 * std[0])
                 }
-            except:
-                pass
+            except (AttributeError, ValueError, IndexError) as e:
+                logger.warning(f"Could not compute confidence intervals for {buoy_id}: {e}")
 
         result = {
             'buoy_id': buoy_id,
@@ -248,8 +269,8 @@ class BuoyForecaster:
                 results['confidence_std'] = std
                 results['lower_95_m'] = predictions - 1.96 * std
                 results['upper_95_m'] = predictions + 1.96 * std
-            except:
-                pass
+            except (AttributeError, ValueError, IndexError) as e:
+                logger.warning(f"Could not compute confidence intervals: {e}")
 
         # Include current readings if requested
         if include_current:

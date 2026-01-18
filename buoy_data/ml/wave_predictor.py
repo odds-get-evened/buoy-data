@@ -1,11 +1,11 @@
 """Machine learning model for wave height prediction."""
 
-import pickle
 import logging
 from pathlib import Path
 from typing import Optional, Dict, Any, Tuple
 import numpy as np
 import pandas as pd
+import joblib
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
@@ -250,8 +250,7 @@ class WaveHeightPredictor:
 
         Path(filepath).parent.mkdir(parents=True, exist_ok=True)
 
-        with open(filepath, 'wb') as f:
-            pickle.dump(model_data, f)
+        joblib.dump(model_data, filepath)
 
         logger.info(f"Model saved to {filepath}")
 
@@ -266,8 +265,7 @@ class WaveHeightPredictor:
         Returns:
             Loaded WaveHeightPredictor instance
         """
-        with open(filepath, 'rb') as f:
-            model_data = pickle.load(f)
+        model_data = joblib.load(filepath)
 
         predictor = cls(model_type=model_data['model_type'])
         predictor.model = model_data['model']

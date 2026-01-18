@@ -1,11 +1,13 @@
 """Conversion utilities for buoy data measurements."""
 
+from typing import Dict, Union
+
 
 class Conversions:
     """Utility class for converting and processing buoy data measurements."""
 
     @staticmethod
-    def get_compass_direction(degrees):
+    def get_compass_direction(degrees: float) -> str:
         """
         Convert degree direction to compass direction.
 
@@ -34,7 +36,7 @@ class Conversions:
         return ''
 
     @staticmethod
-    def get_wave_height(height):
+    def get_wave_height(height: Union[str, float]) -> Dict[str, Union[float, str]]:
         """
         Get the height of the waves.
 
@@ -57,7 +59,7 @@ class Conversions:
         return result
 
     @staticmethod
-    def get_wind_speed(speed):
+    def get_wind_speed(speed: Union[str, float]) -> Union[float, str]:
         """
         Get the wind speed.
 
@@ -75,7 +77,7 @@ class Conversions:
         return ''
 
     @staticmethod
-    def get_wind_direction(wind_dir):
+    def get_wind_direction(wind_dir: Union[str, int]) -> Dict[str, Union[int, str]]:
         """
         Get the actual wind direction.
 
@@ -98,7 +100,7 @@ class Conversions:
         return result
 
     @staticmethod
-    def get_wave_period(period):
+    def get_wave_period(period: Union[str, float]) -> Union[float, str]:
         """
         Get the length of the frequency.
 
@@ -116,7 +118,7 @@ class Conversions:
         return ''
 
     @staticmethod
-    def get_mean_wave_direction(direction):
+    def get_mean_wave_direction(direction: Union[str, int]) -> Dict[str, Union[int, str]]:
         """
         Get the average reported wave direction.
 
@@ -139,7 +141,7 @@ class Conversions:
         return result
 
     @staticmethod
-    def get_barometer(reading):
+    def get_barometer(reading: Union[str, float]) -> Union[float, str]:
         """
         Get air pressure reading.
 
@@ -157,7 +159,7 @@ class Conversions:
         return ''
 
     @staticmethod
-    def get_temp(reading):
+    def get_temp(reading: Union[str, float]) -> Dict[str, Union[float, str]]:
         """
         Get temperature reading.
 
@@ -180,7 +182,7 @@ class Conversions:
         return result
 
     @staticmethod
-    def get_visibility(miles):
+    def get_visibility(miles: Union[str, float]) -> Union[float, str]:
         """
         Get the visibility.
 
@@ -198,7 +200,7 @@ class Conversions:
         return ''
 
     @staticmethod
-    def get_tide(val):
+    def get_tide(val: Union[str, float]) -> Union[float, str]:
         """
         Get tide height.
 
@@ -216,7 +218,7 @@ class Conversions:
         return ''
 
     @staticmethod
-    def get_pressure_trend(val):
+    def get_pressure_trend(val: Union[str, float]) -> Union[float, str]:
         """
         Get the pressure trend.
 
