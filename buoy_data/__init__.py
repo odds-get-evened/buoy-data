@@ -16,6 +16,10 @@ from .utils import (
     validate_station_ids,
     haversine_distance,
     find_stations_by_location,
+    calculate_wave_energy_density,
+    calculate_wave_power,
+    calculate_spatial_gradient,
+    identify_significant_gradients,
 )
 
 __version__ = "1.0.0"
@@ -32,4 +36,8 @@ __all__ = [
     "validate_station_ids",
     "haversine_distance",
     "find_stations_by_location",
+    "calculate_wave_energy_density",
+    "calculate_wave_power",
+    "calculate_spatial_gradient",
+    "identify_significant_gradients",
 ]

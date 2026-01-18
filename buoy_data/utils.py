@@ -4,6 +4,7 @@ import re
 import logging
 import requests
 import math
+import numpy as np
 from typing import List, Optional, Union, Any, Dict, Tuple
 
 logger = logging.getLogger(__name__)
@@ -341,3 +342,288 @@ def find_stations_by_location(
     )
 
     return nearby_stations
+
+
+def calculate_wave_energy_density(
+    wave_height: float,
+    wave_period: float,
+    water_density: float = 1025.0,
+    gravity: float = 9.81
+) -> float:
+    """
+    Calculate wave energy density (energy per unit area) for ocean waves.
+    
+    Based on linear wave theory, the energy density of a wave is:
+    E = (1/8) * ρ * g * H²
+    
+    Where:
+    - ρ (rho) is water density (kg/m³)
+    - g is gravitational acceleration (m/s²)
+    - H is wave height (m)
+    
+    Args:
+        wave_height: Significant wave height in meters
+        wave_period: Wave period in seconds (used for validation)
+        water_density: Seawater density in kg/m³ (default: 1025 kg/m³)
+        gravity: Gravitational acceleration in m/s² (default: 9.81 m/s²)
+    
+    Returns:
+        Wave energy density in Joules per square meter (J/m²)
+        Returns 0.0 if wave_height is invalid or negative
+    
+    Example:
+        >>> # 2m wave with 8s period
+        >>> energy = calculate_wave_energy_density(2.0, 8.0)
+        >>> print(f"{energy:.2f} J/m²")
+    """
+    if wave_height is None or wave_height <= 0 or wave_period is None or wave_period <= 0:
+        return 0.0
+    
+    # Wave energy density formula: E = (1/8) * ρ * g * H²
+    energy_density = (1.0 / 8.0) * water_density * gravity * (wave_height ** 2)
+    
+    return energy_density
+
+
+def calculate_wave_power(
+    wave_height: float,
+    wave_period: float,
+    water_density: float = 1025.0,
+    gravity: float = 9.81
+) -> float:
+    """
+    Calculate wave power (energy flux) per unit width of wave crest.
+    
+    Wave power represents the rate of energy transport and is given by:
+    P = E * Cg
+    
+    Where:
+    - E is wave energy density
+    - Cg is group velocity (for deep water: Cg ≈ gT/4π)
+    
+    This represents the power available for extraction or the energy differential
+    that drives wave motion (relevant to Carnot's principle of energy flow).
+    
+    Args:
+        wave_height: Significant wave height in meters
+        wave_period: Wave period in seconds
+        water_density: Seawater density in kg/m³ (default: 1025 kg/m³)
+        gravity: Gravitational acceleration in m/s² (default: 9.81 m/s²)
+    
+    Returns:
+        Wave power in Watts per meter of wave crest (W/m)
+        Returns 0.0 if inputs are invalid
+    
+    Example:
+        >>> # 2m wave with 8s period
+        >>> power = calculate_wave_power(2.0, 8.0)
+        >>> print(f"{power:.2f} W/m")
+    """
+    if wave_height is None or wave_height <= 0 or wave_period is None or wave_period <= 0:
+        return 0.0
+    
+    # Calculate energy density
+    energy_density = calculate_wave_energy_density(wave_height, wave_period, water_density, gravity)
+    
+    # Calculate group velocity for deep water waves: Cg = gT/(4π)
+    group_velocity = (gravity * wave_period) / (4 * math.pi)
+    
+    # Wave power: P = E * Cg
+    wave_power = energy_density * group_velocity
+    
+    return wave_power
+
+
+def calculate_spatial_gradient(
+    value1: float,
+    value2: float,
+    lat1: float,
+    lon1: float,
+    lat2: float,
+    lon2: float
+) -> Dict[str, float]:
+    """
+    Calculate the spatial gradient between two points.
+    
+    The gradient represents the rate of change of a value (e.g., wave height,
+    energy density) per unit distance. This is useful for identifying energy
+    differentials that drive wave dynamics (Carnot's principle: energy flows
+    from high to low potential).
+    
+    Args:
+        value1: Value at first location (e.g., wave height, energy)
+        value2: Value at second location
+        lat1: Latitude of first point in degrees
+        lon1: Longitude of first point in degrees
+        lat2: Latitude of second point in degrees
+        lon2: Longitude of second point in degrees
+    
+    Returns:
+        Dictionary containing:
+        - 'gradient': Value change per kilometer (value_units/km)
+        - 'distance_km': Distance between points in kilometers
+        - 'value_diff': Absolute difference in values
+        - 'direction': Direction of gradient ('increasing' or 'decreasing')
+    
+    Example:
+        >>> # Wave height gradient between two buoys
+        >>> gradient = calculate_spatial_gradient(
+        ...     2.5, 1.8, 40.0, -74.0, 41.0, -73.0
+        ... )
+        >>> print(f"Gradient: {gradient['gradient']:.4f} m/km")
+    """
+    if any(v is None for v in [value1, value2, lat1, lon1, lat2, lon2]):
+        return {
+            'gradient': 0.0,
+            'distance_km': 0.0,
+            'value_diff': 0.0,
+            'direction': 'none'
+        }
+    
+    # Calculate distance
+    distance_m = haversine_distance(lat1, lon1, lat2, lon2)
+    distance_km = distance_m / 1000.0
+    
+    if distance_km == 0:
+        return {
+            'gradient': 0.0,
+            'distance_km': 0.0,
+            'value_diff': 0.0,
+            'direction': 'none'
+        }
+    
+    # Calculate value difference and gradient
+    value_diff = value2 - value1
+    gradient = value_diff / distance_km
+    
+    # Determine direction
+    direction = 'increasing' if value_diff > 0 else ('decreasing' if value_diff < 0 else 'constant')
+    
+    return {
+        'gradient': gradient,
+        'distance_km': distance_km,
+        'value_diff': abs(value_diff),
+        'direction': direction
+    }
+
+
+def identify_significant_gradients(
+    stations_data: List[Dict[str, Any]],
+    threshold_percentile: float = 75.0
+) -> List[Dict[str, Any]]:
+    """
+    Identify significant energy or wave height gradients between stations.
+    
+    This function analyzes gradients between all pairs of stations and identifies
+    those with significant energy differentials, which indicate areas where wave
+    dynamics are most active (following Carnot's principle of energy flow).
+    
+    Args:
+        stations_data: List of station dictionaries, each containing:
+            - 'station_id': Station identifier
+            - 'latitude': Station latitude
+            - 'longitude': Station longitude
+            - 'wave_height_m': Wave height in meters
+            - 'wave_period': Wave period in seconds (optional, for energy calc)
+        threshold_percentile: Percentile threshold for significance (default: 75)
+                            Gradients above this percentile are considered significant
+    
+    Returns:
+        List of dictionaries describing significant gradients, sorted by magnitude.
+        Each dictionary contains:
+        - 'station1': First station ID
+        - 'station2': Second station ID
+        - 'gradient': Gradient value
+        - 'distance_km': Distance between stations
+        - 'value_diff': Absolute difference in values
+        - 'direction': Direction of energy flow
+        - 'energy_differential': If wave_period available, energy flux difference (W/m)
+    
+    Example:
+        >>> stations = [
+        ...     {'station_id': '44017', 'latitude': 40.7, 'longitude': -72.0,
+        ...      'wave_height_m': 2.5, 'wave_period': 8.0},
+        ...     {'station_id': '44008', 'latitude': 40.5, 'longitude': -69.2,
+        ...      'wave_height_m': 1.8, 'wave_period': 7.0}
+        ... ]
+        >>> gradients = identify_significant_gradients(stations)
+    """
+    if not stations_data or len(stations_data) < 2:
+        logger.warning("Need at least 2 stations to calculate gradients")
+        return []
+    
+    gradients = []
+    
+    # Calculate gradients for all pairs
+    for i in range(len(stations_data)):
+        for j in range(i + 1, len(stations_data)):
+            station1 = stations_data[i]
+            station2 = stations_data[j]
+            
+            # Skip if required fields are missing
+            required_fields = ['station_id', 'latitude', 'longitude', 'wave_height_m']
+            if not all(field in station1 and field in station2 for field in required_fields):
+                continue
+            
+            # Skip if wave heights are missing or invalid
+            if (station1['wave_height_m'] is None or station2['wave_height_m'] is None or
+                station1['wave_height_m'] <= 0 or station2['wave_height_m'] <= 0):
+                continue
+            
+            # Calculate wave height gradient
+            gradient_info = calculate_spatial_gradient(
+                station1['wave_height_m'],
+                station2['wave_height_m'],
+                station1['latitude'],
+                station1['longitude'],
+                station2['latitude'],
+                station2['longitude']
+            )
+            
+            gradient_entry = {
+                'station1': station1['station_id'],
+                'station2': station2['station_id'],
+                'gradient': gradient_info['gradient'],
+                'gradient_abs': abs(gradient_info['gradient']),
+                'distance_km': gradient_info['distance_km'],
+                'value_diff': gradient_info['value_diff'],
+                'direction': gradient_info['direction'],
+                'wave_height_1': station1['wave_height_m'],
+                'wave_height_2': station2['wave_height_m']
+            }
+            
+            # Calculate energy differential if wave periods are available
+            if ('wave_period' in station1 and 'wave_period' in station2 and
+                station1['wave_period'] is not None and station2['wave_period'] is not None and
+                station1['wave_period'] > 0 and station2['wave_period'] > 0):
+                
+                power1 = calculate_wave_power(station1['wave_height_m'], station1['wave_period'])
+                power2 = calculate_wave_power(station2['wave_height_m'], station2['wave_period'])
+                
+                gradient_entry['wave_power_1'] = power1
+                gradient_entry['wave_power_2'] = power2
+                gradient_entry['energy_differential'] = abs(power2 - power1)
+                gradient_entry['energy_flow_direction'] = station1['station_id'] if power1 > power2 else station2['station_id']
+            
+            gradients.append(gradient_entry)
+    
+    if not gradients:
+        logger.warning("No valid gradients calculated")
+        return []
+    
+    # Calculate threshold based on percentile
+    gradient_magnitudes = [g['gradient_abs'] for g in gradients]
+    threshold = np.percentile(gradient_magnitudes, threshold_percentile)
+    
+    # Filter significant gradients
+    significant = [g for g in gradients if g['gradient_abs'] >= threshold]
+    
+    # Sort by magnitude (descending)
+    significant.sort(key=lambda x: x['gradient_abs'], reverse=True)
+    
+    logger.info(
+        f"Identified {len(significant)} significant gradients "
+        f"(threshold: {threshold:.4f}, {threshold_percentile}th percentile)"
+    )
+    
+    return significant
