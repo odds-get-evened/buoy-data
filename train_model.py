@@ -3,8 +3,13 @@
 
 import argparse
 import logging
+from pathlib import Path
+from sklearn.model_selection import RandomizedSearchCV
+from scipy.stats import randint, uniform
+import numpy as np
 
 from buoy_data.ml import BuoyForecaster
+from buoy_data.ml.wave_predictor import WaveHeightPredictor
 from buoy_data.utils import get_available_stations, filter_stations_by_region
 
 logging.basicConfig(
@@ -12,6 +17,54 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+def tune_hyperparameters(X, y):
+    """
+    Perform hyperparameter tuning for Random Forest.
+
+    Args:
+        X: Feature matrix
+        y: Target values
+
+    Returns:
+        Best hyperparameters
+    """
+    logger.info("Starting hyperparameter tuning...")
+
+    # Define hyperparameter search space
+    param_distributions = {
+        'n_estimators': randint(100, 500),
+        'max_depth': [10, 20, 30, 40, None],
+        'min_samples_split': randint(2, 20),
+        'min_samples_leaf': randint(1, 10),
+        'max_features': ['sqrt', 'log2', None],
+        'bootstrap': [True, False]
+    }
+
+    from sklearn.ensemble import RandomForestRegressor
+
+    # Create base model
+    rf = RandomForestRegressor(random_state=42, n_jobs=-1)
+
+    # Random search with cross-validation
+    random_search = RandomizedSearchCV(
+        rf,
+        param_distributions,
+        n_iter=20,  # Number of parameter settings to try
+        cv=5,
+        scoring='neg_root_mean_squared_error',
+        random_state=42,
+        n_jobs=-1,
+        verbose=1
+    )
+
+    random_search.fit(X, y)
+
+    logger.info(f"Best parameters: {random_search.best_params_}")
+    logger.info(f"Best CV RMSE: {-random_search.best_score_:.3f}m")
+
+    return random_search.best_params_
 
 
 def main():
@@ -54,7 +107,22 @@ def main():
         '--days',
         type=int,
         default=7,
-        help='Number of days of historical data to collect'
+        help='Number of days of historical data to collect (default: 7)'
+    )
+    parser.add_argument(
+        '--advanced',
+        action='store_true',
+        help='Use advanced training with improved defaults (14 days, 6 buoys, better model params)'
+    )
+    parser.add_argument(
+        '--tune',
+        action='store_true',
+        help='Perform hyperparameter tuning (slower but better results)'
+    )
+    parser.add_argument(
+        '--retrain',
+        action='store_true',
+        help='Retrain existing model instead of creating new one (requires existing model at --output path)'
     )
     parser.add_argument(
         '--model-type',
@@ -82,10 +150,20 @@ def main():
 
     args = parser.parse_args()
 
+    # Apply advanced mode defaults if requested
+    if args.advanced:
+        if args.days == 7:  # Only override if user didn't specify
+            args.days = 14
+        # Note: Default buoys will be set to 6 buoys instead of 4
+        logger.info("Advanced mode enabled: using improved defaults")
+
     # Validate location-based search arguments
     location_args_provided = sum([args.lat is not None, args.lon is not None, args.radius is not None])
     if location_args_provided > 0 and location_args_provided < 3:
         parser.error("--lat, --lon, and --radius must all be provided together for location-based search")
+
+    # Determine default buoys based on mode
+    default_buoys = ['44017', '44008', '44013', '44025', '44065', '44066'] if args.advanced else ['44017', '44008', '44013', '44025']
 
     # Determine which buoys to use
     if args.lat is not None and args.lon is not None and args.radius is not None:
@@ -96,7 +174,7 @@ def main():
             nearby_stations = find_stations_by_location(args.lat, args.lon, args.radius)
             if not nearby_stations:
                 logger.warning("No stations found within specified radius. Using default buoys.")
-                buoys = ['44017', '44008', '44013', '44025']
+                buoys = default_buoys
             else:
                 buoys = [s['station_id'] for s in nearby_stations]
                 logger.info(f"Found {len(buoys)} stations within radius:")
@@ -107,7 +185,7 @@ def main():
         except Exception as e:
             logger.error(f"Location-based search failed: {e}")
             logger.info("Falling back to default buoys")
-            buoys = ['44017', '44008', '44013', '44025']
+            buoys = default_buoys
     elif args.all_stations:
         try:
             buoys = get_available_stations()
@@ -117,46 +195,192 @@ def main():
         except Exception as e:
             logger.error(f"Failed to fetch available stations: {e}")
             logger.info("Falling back to default buoys")
-            buoys = ['44017', '44008', '44013', '44025']
+            buoys = default_buoys
     elif args.buoys:
         buoys = args.buoys
     else:
         # Default buoys if neither flag is specified
-        buoys = ['44017', '44008', '44013', '44025']
+        buoys = default_buoys
         logger.info("Using default buoys (use --all-stations to train on all available stations)")
 
     args.buoys = buoys
 
-    logger.info("="*60)
-    logger.info("BUOY WAVE HEIGHT FORECASTING - MODEL TRAINING")
-    logger.info("="*60)
-    logger.info(f"Buoy stations: {args.buoys}")
+    # Generate timestamped filename if not retraining
+    if not args.retrain:
+        from datetime import datetime
+        import zlib
+        import random
+        
+        # Generate date string
+        date_str = datetime.now().strftime('%Y%m%d')
+        
+        # Generate random CRC32 hash string
+        random_bytes = str(random.getrandbits(64)).encode('utf-8')
+        crc32_hash = format(zlib.crc32(random_bytes) & 0xffffffff, '08x')
+        
+        # Parse the output path and insert the timestamp
+        output_path = Path(args.output)
+        stem = output_path.stem
+        suffix = output_path.suffix
+        parent = output_path.parent
+        
+        # Create new filename with timestamp
+        new_filename = f"{stem}_{date_str}-{crc32_hash}{suffix}"
+        args.output = str(parent / new_filename)
+        
+        logger.info(f"Generated unique model filename: {args.output}")
+
+    separator = "="*70 if args.advanced else "="*60
+    title = "ADVANCED BUOY WAVE HEIGHT FORECASTING - MODEL TRAINING" if args.advanced else "BUOY WAVE HEIGHT FORECASTING - MODEL TRAINING"
+    
+    logger.info(separator)
+    logger.info(title)
+    logger.info(separator)
+    logger.info(f"Buoy stations: {args.buoys} ({len(args.buoys)} buoys)")
     logger.info(f"Days of data: {args.days}")
     logger.info(f"Model type: {args.model_type}")
+    if args.advanced:
+        logger.info(f"Advanced mode: enabled")
+    if args.tune:
+        logger.info(f"Hyperparameter tuning: enabled")
+    if args.retrain:
+        logger.info(f"Retraining mode: enabled")
     logger.info(f"Output path: {args.output}")
-    logger.info("="*60)
+    logger.info(separator)
 
     try:
         # Initialize forecaster
         with BuoyForecaster(db_path=args.db) as forecaster:
-            # Train model
-            metrics = forecaster.train(
-                buoy_ids=args.buoys,
-                days_back=args.days,
-                model_type=args.model_type,
-                save_path=args.output,
-                use_cache=args.use_cache
-            )
+            
+            # Use advanced training approach if requested
+            if args.advanced or args.tune:
+                # Collect data
+                logger.info(f"\nCollecting training data from {len(args.buoys)} buoys...")
+                raw_data = forecaster.data_collector.collect_training_dataset(
+                    args.buoys,
+                    days_back=args.days,
+                    use_cache=args.use_cache
+                )
 
-            logger.info("\n" + "="*60)
-            logger.info("TRAINING COMPLETE")
-            logger.info("="*60)
-            logger.info(f"Test RMSE: {metrics['test_rmse']:.3f}m")
-            logger.info(f"Test MAE:  {metrics['test_mae']:.3f}m")
-            logger.info(f"Test R²:   {metrics['test_r2']:.3f}")
-            logger.info(f"CV RMSE:   {metrics['cv_rmse']:.3f} ± {metrics['cv_rmse_std']:.3f}m")
-            logger.info(f"\nModel saved to: {args.output}")
-            logger.info("="*60)
+                if raw_data.empty:
+                    raise ValueError("No data collected for training")
+
+                logger.info(f"✓ Collected {len(raw_data)} data points")
+
+                # Prepare features
+                logger.info("\nEngineering features...")
+                prepared_data = forecaster.feature_engineer.prepare_features(
+                    raw_data,
+                    add_lags=True,
+                    add_rolling=True,
+                    add_inter_buoy=True
+                )
+
+                logger.info(f"✓ Created {len(prepared_data.columns)} features")
+
+                # Split features and target
+                X, y = forecaster.feature_engineer.split_features_target(
+                    prepared_data,
+                    target_col='wave_height_m'
+                )
+
+                # Remove rows with missing target
+                valid_idx = ~y.isna()
+                X = X[valid_idx]
+                y = y[valid_idx]
+
+                logger.info(f"✓ Training set: {len(X)} samples, {X.shape[1]} features")
+
+                # Load or create predictor
+                if args.retrain and Path(args.output).exists():
+                    logger.info(f"Loading existing model from {args.output} for retraining...")
+                    predictor = WaveHeightPredictor.load(args.output)
+                    logger.info("Model loaded successfully. Starting retraining...")
+                else:
+                    # Hyperparameter tuning if requested
+                    if args.tune:
+                        best_params = tune_hyperparameters(X, y)
+
+                        # Create predictor with tuned parameters
+                        from sklearn.ensemble import RandomForestRegressor
+                        predictor = WaveHeightPredictor(model_type=args.model_type)
+                        predictor.model = RandomForestRegressor(
+                            **best_params,
+                            random_state=42,
+                            n_jobs=-1
+                        )
+                    else:
+                        # Use default predictor with improved parameters for advanced mode
+                        predictor = WaveHeightPredictor(model_type=args.model_type)
+                        if args.model_type == 'random_forest':
+                            from sklearn.ensemble import RandomForestRegressor
+                            predictor.model = RandomForestRegressor(
+                                n_estimators=200,  # Increased from 100
+                                max_depth=30,      # Deeper trees
+                                min_samples_split=5,
+                                min_samples_leaf=2,
+                                max_features='sqrt',
+                                bootstrap=True,
+                                random_state=42,
+                                n_jobs=-1
+                            )
+
+                # Train the model
+                logger.info("\nTraining model...")
+                forecaster.predictor = predictor
+                metrics = predictor.train(prepared_data, cv_folds=10 if args.advanced else 5)
+
+                # Save model
+                predictor.save(args.output)
+
+                # Print results
+                logger.info("\n" + separator)
+                logger.info("TRAINING COMPLETE - MODEL PERFORMANCE")
+                logger.info(separator)
+                logger.info(f"Test RMSE:     {metrics['test_rmse']:.3f}m ({metrics['test_rmse']*3.28:.3f}ft)")
+                logger.info(f"Test MAE:      {metrics['test_mae']:.3f}m ({metrics['test_mae']*3.28:.3f}ft)")
+                logger.info(f"Test R²:       {metrics['test_r2']:.3f} ({metrics['test_r2']*100:.1f}% variance explained)")
+                logger.info(f"CV RMSE:       {metrics['cv_rmse']:.3f} ± {metrics['cv_rmse_std']:.3f}m")
+
+                # Calculate confidence metrics
+                if 'test_r2' in metrics:
+                    confidence_pct = max(0, metrics['test_r2'] * 100)
+                    logger.info(f"\n✓ Model Confidence: {confidence_pct:.1f}%")
+
+                    if confidence_pct < 70:
+                        logger.warning("\n⚠ Low confidence detected. Recommendations:")
+                        logger.warning("  1. Increase --days (collect more historical data)")
+                        logger.warning("  2. Add more --buoys (improve spatial coverage)")
+                        logger.warning("  3. Use --tune flag (optimize hyperparameters)")
+                    elif confidence_pct < 85:
+                        logger.info("\n✓ Moderate confidence. Consider:")
+                        logger.info("  - Using --tune for better optimization")
+                        logger.info("  - Collecting more training data")
+                    else:
+                        logger.info("\n✓✓ High confidence model!")
+
+                logger.info(f"\nModel saved to: {args.output}")
+                logger.info(separator)
+            else:
+                # Basic training using the forecaster.train() method
+                metrics = forecaster.train(
+                    buoy_ids=args.buoys,
+                    days_back=args.days,
+                    model_type=args.model_type,
+                    save_path=args.output,
+                    use_cache=args.use_cache,
+                    retrain=args.retrain
+                )
+
+                logger.info("\n" + separator)
+                logger.info("TRAINING COMPLETE")
+                logger.info(separator)
+                logger.info(f"Test RMSE: {metrics['test_rmse']:.3f}m")
+                logger.info(f"Test MAE:  {metrics['test_mae']:.3f}m")
+                logger.info(f"Test R²:   {metrics['test_r2']:.3f}")
+                logger.info(f"CV RMSE:   {metrics['cv_rmse']:.3f} ± {metrics['cv_rmse_std']:.3f}m")
+                logger.info(f"\nModel saved to: {args.output}")
+                logger.info(separator)
 
     except Exception as e:
         logger.error(f"Training failed: {e}", exc_info=True)
