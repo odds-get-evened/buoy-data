@@ -536,6 +536,9 @@ python train_model.py [OPTIONS]
 - `--buoys BUOY_ID [BUOY_ID ...]` - List of buoy station IDs (default: 44017 44008 44013 44025)
 - `--all-stations` - Use all available stations from NOAA realtime2 directory
 - `--region {northeast,southeast,caribbean,pacific,greatlakes,hawaii}` - Filter by region (use with --all-stations)
+- `--lat LAT` - Latitude of center point for location-based search (requires --lon and --radius)
+- `--lon LON` - Longitude of center point for location-based search (requires --lat and --radius)
+- `--radius RADIUS` - Search radius in meters from center point (requires --lat and --lon)
 - `--days N` - Number of days of historical data (default: 7)
 - `--model-type {random_forest,gradient_boosting}` - Model type (default: random_forest)
 - `--output PATH` - Path to save trained model (default: models/wave_predictor.pkl)
@@ -555,6 +558,13 @@ python train_model.py --all-stations --days 7
 
 # Train with all Northeast Atlantic stations
 python train_model.py --all-stations --region northeast --days 7
+
+# Train with buoys near New York City (within 200km)
+python train_model.py \
+    --lat 40.7128 \
+    --lon -74.0060 \
+    --radius 200000 \
+    --days 7
 ```
 
 #### train_model_advanced.py
@@ -570,6 +580,9 @@ python train_model_advanced.py [OPTIONS]
 - `--buoys BUOY_ID [BUOY_ID ...]` - List of buoy station IDs (default: 44017 44008 44013 44025 44065 44066)
 - `--all-stations` - Use all available stations from NOAA realtime2 directory
 - `--region {northeast,southeast,caribbean,pacific,greatlakes,hawaii}` - Filter by region (use with --all-stations)
+- `--lat LAT` - Latitude of center point for location-based search (requires --lon and --radius)
+- `--lon LON` - Longitude of center point for location-based search (requires --lat and --radius)
+- `--radius RADIUS` - Search radius in meters from center point (requires --lat and --lon)
 - `--days N` - Number of days of historical data (default: 14, recommended: 21+)
 - `--tune` - Enable hyperparameter tuning with RandomizedSearchCV (slower but better)
 - `--model-type {random_forest,gradient_boosting}` - Model type (default: random_forest)
@@ -595,6 +608,14 @@ python train_model_advanced.py --all-stations --days 14
 
 # Train with all Pacific region stations
 python train_model_advanced.py --all-stations --region pacific --days 14 --tune
+
+# Train with buoys near San Francisco (within 300km)
+python train_model_advanced.py \
+    --lat 37.7749 \
+    --lon -122.4194 \
+    --radius 300000 \
+    --days 14 \
+    --tune
 ```
 
 **Performance Tips:**
@@ -634,11 +655,14 @@ Make predictions with trained models.
 
 **Usage:**
 ```bash
-python predict.py --buoys BUOY_ID [BUOY_ID ...] --model PATH --mode {current,forecast,summary}
+python predict.py [--buoys BUOY_ID [BUOY_ID ...] | --lat LAT --lon LON --radius RADIUS] --model PATH --mode {current,forecast,summary}
 ```
 
 **Options:**
-- `--buoys BUOY_ID [BUOY_ID ...]` - List of buoy station IDs (required)
+- `--buoys BUOY_ID [BUOY_ID ...]` - List of buoy station IDs
+- `--lat LAT` - Latitude of center point for location-based search (requires --lon and --radius)
+- `--lon LON` - Longitude of center point for location-based search (requires --lat and --radius)
+- `--radius RADIUS` - Search radius in meters from center point (requires --lat and --lon)
 - `--model PATH` - Path to trained model (default: models/wave_predictor.pkl)
 - `--mode {current,forecast,summary}` - Prediction mode (default: forecast)
 - `--db CONNECTION_STRING` - Database connection string (default: sqlite:///buoy_ml_data.db)
@@ -650,7 +674,7 @@ python predict.py --buoys BUOY_ID [BUOY_ID ...] --model PATH --mode {current,for
 
 **Examples:**
 ```bash
-# Get current readings
+# Get current readings for specific buoys
 python predict.py --buoys 44017 44008 --mode current
 
 # Forecast wave heights
@@ -658,13 +682,73 @@ python predict.py --buoys 44017 44008 44013 --mode forecast
 
 # Regional summary
 python predict.py --buoys 44017 44008 44013 44025 --mode summary
+
+# Get forecast for all buoys near Boston (within 100km)
+python predict.py \
+    --lat 42.3601 \
+    --lon -71.0589 \
+    --radius 100000 \
+    --mode forecast
+
+# Get regional summary for buoys near Miami (within 150km)
+python predict.py \
+    --lat 25.7617 \
+    --lon -80.1918 \
+    --radius 150000 \
+    --mode summary
 ```
 
 ### Station Discovery and Region Filtering
 
-The package includes utilities to automatically discover all available buoy stations from NOAA's real-time data feeds.
+The package includes utilities to automatically discover all available buoy stations from NOAA's real-time data feeds, including location-based search.
 
-#### Using Python API
+#### Location-based Search
+
+Find buoy stations within a specified radius from a geographic coordinate point. This is useful when specific station IDs are unavailable or when you want to discover all buoys in a region dynamically.
+
+**Using Python API:**
+
+```python
+from buoy_data import find_stations_by_location
+
+# Find all buoys within 100km of New York City
+nearby = find_stations_by_location(
+    center_lat=40.7128,
+    center_lon=-74.0060,
+    radius_meters=100000
+)
+
+for station in nearby:
+    print(f"{station['station_id']}: {station['distance']/1000:.1f}km - {station['location']}")
+```
+
+**Using CLI Tools:**
+
+All training and prediction tools support location-based search:
+
+```bash
+# Train model with buoys near Boston
+python train_model.py \
+    --lat 42.3601 \
+    --lon -71.0589 \
+    --radius 200000 \
+    --days 7
+
+# Predict with buoys near San Francisco
+python predict.py \
+    --lat 37.7749 \
+    --lon -122.4194 \
+    --radius 150000 \
+    --mode forecast
+```
+
+**Benefits:**
+- No need to know specific station IDs in advance
+- Automatically adapts to station availability (handles 404 errors gracefully)
+- Finds closest operational buoys to your area of interest
+- Works with any geographic location worldwide
+
+#### Region-based Discovery
 
 ```python
 from buoy_data import get_available_stations, filter_stations_by_region

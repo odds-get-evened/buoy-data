@@ -20,8 +20,23 @@ def main():
     parser.add_argument(
         '--buoys',
         nargs='+',
-        required=True,
+        default=None,
         help='List of buoy station IDs to query'
+    )
+    parser.add_argument(
+        '--lat',
+        type=float,
+        help='Latitude of center point for location-based search (requires --lon and --radius)'
+    )
+    parser.add_argument(
+        '--lon',
+        type=float,
+        help='Longitude of center point for location-based search (requires --lat and --radius)'
+    )
+    parser.add_argument(
+        '--radius',
+        type=float,
+        help='Search radius in meters from center point (requires --lat and --lon)'
     )
     parser.add_argument(
         '--model',
@@ -48,6 +63,36 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Validate location-based search arguments
+    location_args_provided = sum([args.lat is not None, args.lon is not None, args.radius is not None])
+    if location_args_provided > 0 and location_args_provided < 3:
+        parser.error("--lat, --lon, and --radius must all be provided together for location-based search")
+
+    # Require either --buoys or location-based search
+    if args.buoys is None and location_args_provided == 0:
+        parser.error("Either --buoys or (--lat, --lon, --radius) must be provided")
+
+    # Determine which buoys to use
+    if args.lat is not None and args.lon is not None and args.radius is not None:
+        # Location-based search
+        from buoy_data import find_stations_by_location
+        try:
+            logger.info(f"Searching for buoys within {args.radius}m of ({args.lat}, {args.lon})...")
+            nearby_stations = find_stations_by_location(args.lat, args.lon, args.radius)
+            if not nearby_stations:
+                logger.error("No stations found within specified radius.")
+                return 1
+            else:
+                args.buoys = [s['station_id'] for s in nearby_stations]
+                logger.info(f"Found {len(args.buoys)} stations within radius:")
+                for station in nearby_stations[:10]:  # Show first 10
+                    logger.info(f"  {station['station_id']}: {station['distance']/1000:.1f}km - {station['location']}")
+                if len(nearby_stations) > 10:
+                    logger.info(f"  ... and {len(nearby_stations) - 10} more")
+        except Exception as e:
+            logger.error(f"Location-based search failed: {e}")
+            return 1
 
     try:
         # Initialize forecaster

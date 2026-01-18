@@ -3,7 +3,8 @@
 import re
 import logging
 import requests
-from typing import List, Optional, Union, Any
+import math
+from typing import List, Optional, Union, Any, Dict, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -218,3 +219,125 @@ def validate_station_ids(station_ids: List[str]) -> List[str]:
             logger.warning(f"Skipping invalid station ID: {station_id}")
 
     return valid_stations
+
+
+def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """
+    Calculate the great-circle distance between two points on Earth using the Haversine formula.
+
+    Args:
+        lat1: Latitude of first point in degrees
+        lon1: Longitude of first point in degrees
+        lat2: Latitude of second point in degrees
+        lon2: Longitude of second point in degrees
+
+    Returns:
+        Distance in meters
+
+    Example:
+        >>> # Distance from New York to Boston (approx)
+        >>> dist = haversine_distance(40.7128, -74.0060, 42.3601, -71.0589)
+        >>> print(f"{dist/1000:.1f} km")  # Should be ~300 km
+    """
+    # Earth's radius in meters
+    R = 6371000.0
+
+    # Convert degrees to radians
+    lat1_rad = math.radians(lat1)
+    lat2_rad = math.radians(lat2)
+    delta_lat = math.radians(lat2 - lat1)
+    delta_lon = math.radians(lon2 - lon1)
+
+    # Haversine formula
+    a = (math.sin(delta_lat / 2) ** 2 +
+         math.cos(lat1_rad) * math.cos(lat2_rad) *
+         math.sin(delta_lon / 2) ** 2)
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+    distance = R * c
+
+    return distance
+
+
+def find_stations_by_location(
+    center_lat: float,
+    center_lon: float,
+    radius_meters: float,
+    station_ids: Optional[List[str]] = None
+) -> List[Dict[str, Union[str, float]]]:
+    """
+    Find buoy stations within a specified radius from a center point.
+
+    Args:
+        center_lat: Latitude of center point in degrees
+        center_lon: Longitude of center point in degrees
+        radius_meters: Search radius in meters
+        station_ids: Optional list of station IDs to search within.
+                    If None, searches all stations in STATIONS database.
+
+    Returns:
+        List of dictionaries containing station_id and distance, sorted by distance.
+        Example: [{'station_id': '44017', 'distance': 15000.0}, ...]
+
+    Raises:
+        ValueError: If center coordinates are invalid
+
+    Example:
+        >>> # Find all buoys within 100km of New York City
+        >>> nearby = find_stations_by_location(40.7128, -74.0060, 100000)
+        >>> for station in nearby:
+        ...     print(f"{station['station_id']}: {station['distance']/1000:.1f}km")
+    """
+    from .stations_data import STATIONS
+
+    # Validate coordinates
+    if not (-90 <= center_lat <= 90):
+        raise ValueError(f"Invalid latitude: {center_lat}. Must be between -90 and 90.")
+    if not (-180 <= center_lon <= 180):
+        raise ValueError(f"Invalid longitude: {center_lon}. Must be between -180 and 180.")
+    if radius_meters <= 0:
+        raise ValueError(f"Invalid radius: {radius_meters}. Must be positive.")
+
+    # Determine which stations to search
+    if station_ids is None:
+        search_stations = list(STATIONS.keys())
+    else:
+        search_stations = station_ids
+
+    nearby_stations = []
+
+    for station_id in search_stations:
+        if station_id not in STATIONS:
+            logger.debug(f"Station {station_id} not found in STATIONS database")
+            continue
+
+        station_data = STATIONS[station_id]
+
+        # Skip stations without valid coordinates
+        station_lat = station_data.get('lat')
+        station_lon = station_data.get('long')
+        if station_lat is None or station_lon is None:
+            continue
+
+        # Calculate distance
+        distance = haversine_distance(center_lat, center_lon, station_lat, station_lon)
+
+        # Check if within radius
+        if distance <= radius_meters:
+            nearby_stations.append({
+                'station_id': station_id,
+                'distance': distance,
+                'latitude': station_lat,
+                'longitude': station_lon,
+                'location': station_data.get('location', '')
+            })
+
+    # Sort by distance (closest first)
+    nearby_stations.sort(key=lambda x: x['distance'])
+
+    logger.info(
+        f"Found {len(nearby_stations)} stations within {radius_meters/1000:.1f}km "
+        f"of ({center_lat}, {center_lon})"
+    )
+
+    return nearby_stations
