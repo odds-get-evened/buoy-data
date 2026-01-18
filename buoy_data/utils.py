@@ -313,12 +313,11 @@ def find_stations_by_location(
 
         station_data = STATIONS[station_id]
 
-        # Skip stations without coordinates
-        if not station_data.get('lat') or not station_data.get('long'):
+        # Skip stations without valid coordinates
+        station_lat = station_data.get('lat')
+        station_lon = station_data.get('long')
+        if station_lat is None or station_lon is None:
             continue
-
-        station_lat = station_data['lat']
-        station_lon = station_data['long']
 
         # Calculate distance
         distance = haversine_distance(center_lat, center_lon, station_lat, station_lon)
