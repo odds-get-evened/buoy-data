@@ -5,6 +5,7 @@ import argparse
 import json
 import logging
 from buoy_data.ml import BuoyForecaster
+from buoy_data import find_stations_by_location
 
 logging.basicConfig(
     level=logging.INFO,
@@ -82,7 +83,6 @@ def main():
     # Determine which buoys to use
     if args.lat is not None and args.lon is not None and args.radius is not None:
         # Location-based search
-        from buoy_data import find_stations_by_location
         try:
             logger.info(f"Searching for buoys within {args.radius}m of ({args.lat}, {args.lon})...")
             nearby_stations = find_stations_by_location(args.lat, args.lon, args.radius)
@@ -123,6 +123,25 @@ def main():
             
             elif args.mode == 'gradients':
                 # Analyze energy gradients and differentials
+                if len(args.buoys) < 2:
+                    logger.error(
+                        f"Gradient analysis requires at least 2 stations, but only {len(args.buoys)} "
+                        f"station(s) found. Try increasing your search radius or using a different "
+                        f"center point."
+                    )
+                    # Show nearby stations that were just outside the radius if location-based search was used
+                    if args.lat is not None and args.lon is not None and args.radius is not None:
+                        # Search with 50% larger radius to show what's nearby
+                        extended_radius = args.radius * 1.5
+                        extended_stations = find_stations_by_location(args.lat, args.lon, extended_radius)
+                        if len(extended_stations) > len(args.buoys):
+                            logger.info(
+                                f"Increasing radius to {extended_radius/1000:.1f}km would find "
+                                f"{len(extended_stations)} stations:"
+                            )
+                            for station in extended_stations[:10]:
+                                logger.info(f"  {station['station_id']}: {station['distance']/1000:.1f}km - {station['location']}")
+                    return 1
                 logger.info(f"Analyzing spatial gradients for {len(args.buoys)} buoys...")
                 output = forecaster.analyze_gradients(
                     args.buoys,

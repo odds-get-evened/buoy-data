@@ -432,7 +432,18 @@ class BuoyForecaster:
             stations_data.append(station_dict)
         
         if len(stations_data) < 2:
-            raise ValueError("Need at least 2 stations with valid data for gradient analysis")
+            error_msg = (
+                f"Need at least 2 stations with valid data for gradient analysis, "
+                f"but only found {len(stations_data)} station(s). "
+            )
+            if len(stations_data) == 0:
+                error_msg += "None of the specified stations had valid coordinate data."
+            elif len(stations_data) == 1:
+                error_msg += (
+                    f"Station found: {stations_data[0]['station_id']}. "
+                    "Try increasing your search radius or specifying additional buoy stations explicitly."
+                )
+            raise ValueError(error_msg)
         
         # Identify significant gradients
         significant = identify_significant_gradients(stations_data, threshold_percentile)
