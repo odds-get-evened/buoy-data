@@ -301,25 +301,38 @@ class DataCollector:
         """
         logger.info("Saving data to database cache...")
         saved_count = 0
-
+        
+        # Prepare records for bulk insert
+        records_to_insert = []
+        
         for _, row in df.iterrows():
             try:
                 # Check if already logged
                 if not self.db.is_logged(row['buoy_id'], int(row['timestamp'])):
-                    self.db.log_data(
-                        buoy_id=row['buoy_id'],
-                        wind_dir=float(row.get('wind_direction_deg', 0) or 0),
-                        wind_spd=float(row.get('wind_speed', 0) or 0),
-                        wave_height=float(row.get('wave_height_m', 0) or 0),
-                        water_temp=float(row.get('water_temp_c', 0) or 0),
-                        reading_time=int(row['timestamp'])
-                    )
-                    saved_count += 1
+                    records_to_insert.append({
+                        'buoy_id': row['buoy_id'],
+                        'wind_dir': float(row.get('wind_direction_deg', 0) or 0),
+                        'wind_spd': float(row.get('wind_speed', 0) or 0),
+                        'wave_height': float(row.get('wave_height_m', 0) or 0),
+                        'water_temp': float(row.get('water_temp_c', 0) or 0),
+                        'reading_time': int(row['timestamp']),
+                        'insert_stamp': int(time.time())
+                    })
             except Exception as e:
-                logger.debug(f"Could not save record: {e}")
+                logger.debug(f"Could not prepare record: {e}")
                 continue
-
-        self.session.commit()
+        
+        # Bulk insert if we have records
+        if records_to_insert:
+            try:
+                from .database import BuoyReading
+                self.session.bulk_insert_mappings(BuoyReading, records_to_insert)
+                self.session.commit()
+                saved_count = len(records_to_insert)
+            except Exception as e:
+                logger.error(f"Bulk insert failed: {e}")
+                self.session.rollback()
+        
         logger.info(f"✓ Saved {saved_count} new readings to database")
 
     def close(self):

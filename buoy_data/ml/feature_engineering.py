@@ -1,10 +1,13 @@
 """Feature engineering for buoy data ML models."""
 
+import logging
 import numpy as np
 import pandas as pd
 from typing import List, Tuple, Optional
 from datetime import datetime
 from ..station import Station
+
+logger = logging.getLogger(__name__)
 
 
 class FeatureEngineer:
@@ -58,20 +61,30 @@ class FeatureEngineer:
         """
         df = df.copy()
 
-        # Add station coordinates
-        def add_coordinates(row):
+        # Cache station data for all unique buoy IDs to avoid repeated lookups
+        unique_buoys = df['buoy_id'].unique()
+        station_cache = {}
+        
+        for buoy_id in unique_buoys:
             try:
-                station = Station(row['buoy_id'])
-                row['latitude'] = station.get_latitude()
-                row['longitude'] = station.get_longitude()
-                row['depth'] = station.get_depth()
-            except:
-                row['latitude'] = None
-                row['longitude'] = None
-                row['depth'] = None
-            return row
-
-        df = df.apply(add_coordinates, axis=1)
+                station = Station(buoy_id)
+                station_cache[buoy_id] = {
+                    'latitude': station.get_latitude(),
+                    'longitude': station.get_longitude(),
+                    'depth': station.get_depth()
+                }
+            except (KeyError, AttributeError, ValueError, TypeError) as e:
+                logger.warning(f"Failed to get coordinates for {buoy_id}: {e}")
+                station_cache[buoy_id] = {
+                    'latitude': None,
+                    'longitude': None,
+                    'depth': None
+                }
+        
+        # Vectorized mapping using cached data
+        df['latitude'] = df['buoy_id'].map(lambda x: station_cache.get(x, {}).get('latitude'))
+        df['longitude'] = df['buoy_id'].map(lambda x: station_cache.get(x, {}).get('longitude'))
+        df['depth'] = df['buoy_id'].map(lambda x: station_cache.get(x, {}).get('depth'))
 
         return df
 
