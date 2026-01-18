@@ -81,10 +81,20 @@ class FeatureEngineer:
                     'depth': None
                 }
         
-        # Vectorized mapping using cached data
-        df['latitude'] = df['buoy_id'].map(lambda x: station_cache.get(x, {}).get('latitude'))
-        df['longitude'] = df['buoy_id'].map(lambda x: station_cache.get(x, {}).get('longitude'))
-        df['depth'] = df['buoy_id'].map(lambda x: station_cache.get(x, {}).get('depth'))
+        # Vectorized mapping using cached data - more efficient than lambda
+        # Create lookup functions once to avoid repeated lambda overhead
+        def get_latitude(buoy_id):
+            return station_cache.get(buoy_id, {}).get('latitude')
+        
+        def get_longitude(buoy_id):
+            return station_cache.get(buoy_id, {}).get('longitude')
+        
+        def get_depth(buoy_id):
+            return station_cache.get(buoy_id, {}).get('depth')
+        
+        df['latitude'] = df['buoy_id'].map(get_latitude)
+        df['longitude'] = df['buoy_id'].map(get_longitude)
+        df['depth'] = df['buoy_id'].map(get_depth)
 
         return df
 

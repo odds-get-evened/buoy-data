@@ -345,7 +345,7 @@ class DataCollector:
         # Bulk insert if we have records
         if records_to_insert:
             try:
-                from .database import BuoyReading
+                from ..database import BuoyReading
                 self.session.bulk_insert_mappings(BuoyReading, records_to_insert)
                 self.session.commit()
                 saved_count = len(records_to_insert)
