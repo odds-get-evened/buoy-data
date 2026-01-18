@@ -67,6 +67,28 @@ class WaveHeightPredictor:
         else:
             raise ValueError(f"Unknown model type: {model_type}")
 
+    def _scale_features(self, X: pd.DataFrame, fit: bool = False) -> np.ndarray:
+        """
+        Scale features using StandardScaler with warning suppression.
+        
+        Suppresses "invalid value encountered in divide" warnings that occur
+        when StandardScaler encounters features with zero variance. These
+        warnings are expected and don't affect model performance.
+        
+        Args:
+            X: Features to scale
+            fit: If True, fit the scaler before transforming (for training)
+            
+        Returns:
+            Scaled feature array
+        """
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', message='invalid value encountered in divide', category=RuntimeWarning)
+            if fit:
+                return self.scaler.fit_transform(X)
+            else:
+                return self.scaler.transform(X)
+
     def train(
         self,
         df: pd.DataFrame,
@@ -104,13 +126,9 @@ class WaveHeightPredictor:
             X, y, test_size=test_size, random_state=self.random_state
         )
 
-        # Scale features
-        # Suppress warnings from sklearn's StandardScaler when it encounters zero variance features
-        # These warnings are expected and don't affect model performance (sklearn handles them gracefully)
-        with warnings.catch_warnings():
-            warnings.filterwarnings('ignore', message='invalid value encountered in divide', category=RuntimeWarning)
-            X_train_scaled = self.scaler.fit_transform(X_train)
-            X_test_scaled = self.scaler.transform(X_test)
+        # Scale features (fit on training data, transform both)
+        X_train_scaled = self._scale_features(X_train, fit=True)
+        X_test_scaled = self._scale_features(X_test, fit=False)
 
         # Store feature columns
         self.feature_columns = X.columns.tolist()
@@ -191,10 +209,7 @@ class WaveHeightPredictor:
         X = X.fillna(X.median())
 
         # Scale features
-        # Suppress warnings from sklearn's StandardScaler when it encounters zero variance features
-        with warnings.catch_warnings():
-            warnings.filterwarnings('ignore', message='invalid value encountered in divide', category=RuntimeWarning)
-            X_scaled = self.scaler.transform(X)
+        X_scaled = self._scale_features(X, fit=False)
 
         # Make predictions
         predictions = self.model.predict(X_scaled)
@@ -225,10 +240,7 @@ class WaveHeightPredictor:
         X = X.fillna(X.median())
         
         # Scale features
-        # Suppress warnings from sklearn's StandardScaler when it encounters zero variance features
-        with warnings.catch_warnings():
-            warnings.filterwarnings('ignore', message='invalid value encountered in divide', category=RuntimeWarning)
-            X_scaled = self.scaler.transform(X)
+        X_scaled = self._scale_features(X, fit=False)
 
         # Get predictions from all trees
         tree_predictions = np.array([
