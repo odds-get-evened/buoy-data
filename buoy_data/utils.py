@@ -3,9 +3,85 @@
 import re
 import logging
 import requests
-from typing import List, Optional
+from typing import List, Optional, Union, Any
 
 logger = logging.getLogger(__name__)
+
+
+def safe_int(value: Any, default: int = 0) -> int:
+    """
+    Safely convert a value to integer.
+
+    Args:
+        value: Value to convert
+        default: Default value if conversion fails
+
+    Returns:
+        Converted integer or default value
+
+    Example:
+        >>> safe_int("123")
+        123
+        >>> safe_int("invalid", default=-1)
+        -1
+        >>> safe_int(None, default=0)
+        0
+    """
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        logger.debug(f"Failed to convert {value!r} to int, using default {default}")
+        return default
+
+
+def safe_float(value: Any, default: float = 0.0) -> float:
+    """
+    Safely convert a value to float.
+
+    Args:
+        value: Value to convert
+        default: Default value if conversion fails
+
+    Returns:
+        Converted float or default value
+
+    Example:
+        >>> safe_float("123.45")
+        123.45
+        >>> safe_float("invalid", default=-1.0)
+        -1.0
+        >>> safe_float(None, default=0.0)
+        0.0
+    """
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        logger.debug(f"Failed to convert {value!r} to float, using default {default}")
+        return default
+
+
+def safe_str(value: Any, default: str = "") -> str:
+    """
+    Safely convert a value to string.
+
+    Args:
+        value: Value to convert
+        default: Default value if conversion fails
+
+    Returns:
+        Converted string or default value
+    """
+    if value is None:
+        return default
+    try:
+        return str(value)
+    except (TypeError, ValueError):
+        logger.debug(f"Failed to convert {value!r} to str, using default {default!r}")
+        return default
 
 
 def get_available_stations(timeout: int = 10) -> List[str]:
