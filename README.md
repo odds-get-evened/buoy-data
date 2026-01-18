@@ -299,11 +299,17 @@ python train_model.py --buoys 44017 44008 44013 44025 --days 7
 
 **Advanced Training (Recommended for better confidence):**
 ```bash
-# With improved default parameters
-python train_model_advanced.py --buoys 44017 44008 44013 44025 44065 44066 --days 14
+# With improved default parameters (14 days, 6 buoys, better model params)
+python train_model.py --advanced --buoys 44017 44008 44013 44025 44065 44066 --days 14
 
 # With hyperparameter tuning (slower but best results)
-python train_model_advanced.py --tune --days 21 --buoys 44017 44008 44013 44025 44065 44066
+python train_model.py --advanced --tune --days 21 --buoys 44017 44008 44013 44025 44065 44066
+```
+
+**Retrain Existing Model:**
+```bash
+# Retrain an existing model with new data
+python train_model.py --retrain --output models/wave_predictor_20260118-a1b2c3d4.pkl --days 7
 ```
 
 **Analyze Model Performance:**
@@ -331,25 +337,32 @@ python predict.py --buoys 44017 44008 44013 --model models/wave_predictor.pkl --
 ```bash
 # Train with default parameters (7 days, 4 buoys)
 python train_model.py --buoys 44017 44008 44013 44025 --days 7
+# Note: Model will be saved with a unique timestamped filename like:
+# models/wave_predictor_20260118-a1b2c3d4.pkl
 ```
 
 **Option B: Advanced Training (Recommended)**
 ```bash
-# Train with improved parameters (14 days, 6 buoys)
-python train_model_advanced.py \
+# Train with improved parameters (14 days, 6 buoys, better model params)
+python train_model.py --advanced \
     --buoys 44017 44008 44013 44025 44065 44066 \
-    --days 14 \
-    --output models/wave_predictor_optimized.pkl
+    --days 14
 ```
 
 **Option C: Hyperparameter Tuning (Best Quality)**
 ```bash
 # Optimize model with RandomizedSearchCV (takes longer)
-python train_model_advanced.py \
-    --tune \
+python train_model.py --advanced --tune \
     --days 21 \
-    --buoys 44017 44008 44013 44025 44065 44066 \
-    --output models/wave_predictor_tuned.pkl
+    --buoys 44017 44008 44013 44025 44065 44066
+```
+
+**Option D: Retrain Existing Model**
+```bash
+# Retrain an existing model with new data (preserves model structure)
+python train_model.py --retrain \
+    --output models/wave_predictor_20260118-a1b2c3d4.pkl \
+    --days 7
 ```
 
 #### 2. Analyze Model Performance
@@ -440,19 +453,25 @@ If your model has low confidence (<70%), follow these steps:
 **Step 1: Collect More Historical Data**
 ```bash
 # Increase from 7 to 21 days
-python train_model_advanced.py --days 21 --buoys 44017 44008 44013 44025
+python train_model.py --advanced --days 21 --buoys 44017 44008 44013 44025
 ```
 
 **Step 2: Add More Buoy Stations**
 ```bash
 # More buoys = better spatial coverage
-python train_model_advanced.py --days 14 --buoys 44017 44008 44013 44025 44065 44066 44007
+python train_model.py --advanced --days 14 --buoys 44017 44008 44013 44025 44065 44066 44007
 ```
 
 **Step 3: Use Hyperparameter Tuning**
 ```bash
 # Let the model find optimal parameters
-python train_model_advanced.py --tune --days 21 --buoys 44017 44008 44013 44025 44065 44066
+python train_model.py --advanced --tune --days 21 --buoys 44017 44008 44013 44025 44065 44066
+```
+
+**Step 4: Re-analyze**
+```bash
+# Use the most recent timestamped model file
+python analyze_model.py --model models/wave_predictor_20260118-a1b2c3d4.pkl
 ```
 
 **Step 4: Re-analyze**
@@ -571,7 +590,7 @@ python examples_ml.py
 
 #### train_model.py
 
-Basic training script with default parameters.
+Unified training script supporting basic and advanced training modes.
 
 **Usage:**
 ```bash
@@ -579,25 +598,43 @@ python train_model.py [OPTIONS]
 ```
 
 **Options:**
-- `--buoys BUOY_ID [BUOY_ID ...]` - List of buoy station IDs (default: 44017 44008 44013 44025)
+- `--buoys BUOY_ID [BUOY_ID ...]` - List of buoy station IDs (default: 44017 44008 44013 44025, or 6 buoys with --advanced)
 - `--all-stations` - Use all available stations from NOAA realtime2 directory
 - `--region {northeast,southeast,caribbean,pacific,greatlakes,hawaii}` - Filter by region (use with --all-stations)
 - `--lat LAT` - Latitude of center point for location-based search (requires --lon and --radius)
 - `--lon LON` - Longitude of center point for location-based search (requires --lat and --radius)
 - `--radius RADIUS` - Search radius in meters from center point (requires --lat and --lon)
-- `--days N` - Number of days of historical data (default: 7)
+- `--days N` - Number of days of historical data (default: 7, or 14 with --advanced)
+- `--advanced` - Use advanced training with improved defaults (14 days, 6 buoys, better model parameters)
+- `--tune` - Perform hyperparameter tuning with RandomizedSearchCV (slower but better results)
+- `--retrain` - Retrain existing model instead of creating new one (requires existing model at --output path)
 - `--model-type {random_forest,gradient_boosting}` - Model type (default: random_forest)
-- `--output PATH` - Path to save trained model (default: models/wave_predictor.pkl)
+- `--output PATH` - Path template for saving trained model (default: models/wave_predictor.pkl)
+  - **Note:** Unless using `--retrain`, a unique timestamp is automatically appended (e.g., `models/wave_predictor_20260118-a1b2c3d4.pkl`)
 - `--db CONNECTION_STRING` - Database connection string (default: sqlite:///buoy_ml_data.db)
+- `--use-cache` - Use cached data from database instead of re-downloading
 
 **Examples:**
 ```bash
-# Train with specific buoys
+# Basic training (creates models/wave_predictor_YYYYMMDD-HASH.pkl)
 python train_model.py \
     --buoys 44017 44008 44013 44025 \
-    --days 7 \
-    --model-type random_forest \
-    --output models/my_model.pkl
+    --days 7
+
+# Advanced training with improved defaults
+python train_model.py --advanced \
+    --buoys 44017 44008 44013 44025 44065 44066 \
+    --days 14
+
+# Advanced training with hyperparameter tuning
+python train_model.py --advanced --tune \
+    --days 21 \
+    --buoys 44017 44008 44013 44025 44065 44066
+
+# Retrain an existing model
+python train_model.py --retrain \
+    --output models/wave_predictor_20260118-a1b2c3d4.pkl \
+    --days 7
 
 # Train with all available stations
 python train_model.py --all-stations --days 7
@@ -612,62 +649,6 @@ python train_model.py \
     --radius 200000 \
     --days 7
 ```
-
-#### train_model_advanced.py
-
-Advanced training with hyperparameter tuning and improved defaults.
-
-**Usage:**
-```bash
-python train_model_advanced.py [OPTIONS]
-```
-
-**Options:**
-- `--buoys BUOY_ID [BUOY_ID ...]` - List of buoy station IDs (default: 44017 44008 44013 44025 44065 44066)
-- `--all-stations` - Use all available stations from NOAA realtime2 directory
-- `--region {northeast,southeast,caribbean,pacific,greatlakes,hawaii}` - Filter by region (use with --all-stations)
-- `--lat LAT` - Latitude of center point for location-based search (requires --lon and --radius)
-- `--lon LON` - Longitude of center point for location-based search (requires --lat and --radius)
-- `--radius RADIUS` - Search radius in meters from center point (requires --lat and --lon)
-- `--days N` - Number of days of historical data (default: 14, recommended: 21+)
-- `--tune` - Enable hyperparameter tuning with RandomizedSearchCV (slower but better)
-- `--model-type {random_forest,gradient_boosting}` - Model type (default: random_forest)
-- `--output PATH` - Path to save trained model (default: models/wave_predictor_optimized.pkl)
-- `--db CONNECTION_STRING` - Database connection string (default: sqlite:///buoy_ml_data.db)
-
-**Examples:**
-```bash
-# Quick training with improved parameters
-python train_model_advanced.py --days 14
-
-# Best quality with hyperparameter tuning
-python train_model_advanced.py --tune --days 21
-
-# Custom buoys and output path
-python train_model_advanced.py \
-    --buoys 44017 44008 44013 \
-    --days 14 \
-    --output models/northeast_predictor.pkl
-
-# Train with ALL available stations (comprehensive model)
-python train_model_advanced.py --all-stations --days 14
-
-# Train with all Pacific region stations
-python train_model_advanced.py --all-stations --region pacific --days 14 --tune
-
-# Train with buoys near San Francisco (within 300km)
-python train_model_advanced.py \
-    --lat 37.7749 \
-    --lon -122.4194 \
-    --radius 300000 \
-    --days 14 \
-    --tune
-```
-
-**Performance Tips:**
-- More days = better model (recommended: 14-21 days)
-- More buoys = better spatial coverage (recommended: 6+ buoys)
-- Use `--tune` for production models (takes 5-10x longer)
 
 #### analyze_model.py
 
@@ -960,10 +941,10 @@ Using `--all-stations` automatically trains on all buoys with available data:
 
 ```bash
 # Train on ALL available stations (200+ buoys)
-python train_model_advanced.py --all-stations --days 14
+python train_model.py --advanced --all-stations --days 14
 
 # Train on all Northeast stations (40+ buoys)
-python train_model_advanced.py --all-stations --region northeast --days 14
+python train_model.py --advanced --all-stations --region northeast --days 14
 ```
 
 **Benefits:**
@@ -1030,8 +1011,7 @@ buoy-data/
 │       ├── feature_engineering.py # Feature creation for ML
 │       ├── wave_predictor.py     # ML prediction models
 │       └── forecaster.py         # High-level forecasting interface
-├── train_model.py          # Basic model training CLI
-├── train_model_advanced.py # Advanced training with tuning
+├── train_model.py          # Unified model training CLI (basic + advanced modes)
 ├── predict.py              # Prediction CLI tool
 ├── analyze_model.py        # Model diagnostics tool
 ├── download_data.py        # Data download utility
@@ -1052,7 +1032,8 @@ buoy-data/
 | **Run core examples** | `python examples.py` |
 | **Run ML examples** | `python examples_ml.py` |
 | **Train basic model** | `python train_model.py --buoys 44017 44008 --days 7` |
-| **Train optimized model** | `python train_model_advanced.py --tune --days 21` |
+| **Train advanced model** | `python train_model.py --advanced --tune --days 21` |
+| **Retrain existing model** | `python train_model.py --retrain --output models/wave_predictor_YYYYMMDD-HASH.pkl` |
 | **Analyze model** | `python analyze_model.py --model models/wave_predictor.pkl` |
 | **Make predictions** | `python predict.py --buoys 44017 44008 --mode forecast` |
 | **Find nearby buoys** | `python predict.py --lat 40.7 --lon -74.0 --radius 100000 --mode current` |

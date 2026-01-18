@@ -1,6 +1,7 @@
 """High-level forecasting interface for buoy wave heights."""
 
 import logging
+from pathlib import Path
 from typing import List, Dict, Any, Optional
 import pandas as pd
 import numpy as np
@@ -76,10 +77,11 @@ class BuoyForecaster:
         days_back: int = 7,
         model_type: str = "random_forest",
         save_path: Optional[str] = None,
-        use_cache: bool = False
+        use_cache: bool = False,
+        retrain: bool = False
     ) -> Dict[str, float]:
         """
-        Train a new forecasting model.
+        Train a new forecasting model or retrain an existing one.
 
         Args:
             buoy_ids: List of buoy station IDs to include in training
@@ -87,6 +89,7 @@ class BuoyForecaster:
             model_type: Type of model ('random_forest' or 'gradient_boosting')
             save_path: Optional path to save trained model
             use_cache: If True, use cached data from database (default: False)
+            retrain: If True, load existing model from save_path and retrain it (default: False)
 
         Returns:
             Dictionary of training metrics
@@ -103,8 +106,10 @@ class BuoyForecaster:
             raise ValueError("days_back must be between 1 and 365")
         if model_type not in ["random_forest", "gradient_boosting"]:
             raise ValueError("model_type must be 'random_forest' or 'gradient_boosting'")
+        if retrain and not save_path:
+            raise ValueError("save_path must be provided when retrain=True")
             
-        logger.info(f"Training model on {len(buoy_ids)} buoy stations...")
+        logger.info(f"{'Retraining' if retrain else 'Training'} model on {len(buoy_ids)} buoy stations...")
 
         # Collect training data
         logger.info("Collecting training data...")
@@ -128,8 +133,19 @@ class BuoyForecaster:
             add_inter_buoy=True
         )
 
+        # Load existing model or create new one
+        if retrain:
+            if Path(save_path).exists():
+                logger.info(f"Loading existing model from {save_path} for retraining...")
+                self.predictor = WaveHeightPredictor.load(save_path)
+                logger.info("Model loaded successfully. Starting retraining...")
+            else:
+                logger.warning(f"Model file {save_path} not found. Training new model instead...")
+                self.predictor = WaveHeightPredictor(model_type=model_type)
+        else:
+            self.predictor = WaveHeightPredictor(model_type=model_type)
+        
         # Train model
-        self.predictor = WaveHeightPredictor(model_type=model_type)
         metrics = self.predictor.train(prepared_data)
 
         # Save model if requested
