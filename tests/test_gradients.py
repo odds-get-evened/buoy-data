@@ -338,6 +338,26 @@ class TestGradientIntegration(unittest.TestCase):
         self.assertIn('wave_power_2', grad)
         self.assertGreater(grad['wave_power_1'], 0)
         self.assertGreater(grad['wave_power_2'], 0)
+    
+    def test_insufficient_stations_error_message(self):
+        """Test that error message is helpful when insufficient stations are provided."""
+        # Test with no stations
+        stations = []
+        gradients = identify_significant_gradients(stations, threshold_percentile=75)
+        self.assertEqual(len(gradients), 0)
+        
+        # Test with one station
+        stations = [
+            {
+                'station_id': '44011',
+                'latitude': 41.11,
+                'longitude': -66.62,
+                'wave_height_m': 2.0,
+                'wave_period': 8.0
+            }
+        ]
+        gradients = identify_significant_gradients(stations, threshold_percentile=75)
+        self.assertEqual(len(gradients), 0)  # Should return empty list, not raise error
 
 
 if __name__ == '__main__':
