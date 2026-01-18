@@ -610,7 +610,7 @@ def identify_significant_gradients(
                     period1 = None
                     period2 = None
                 
-                if period1 and period1 > 0 and period2 and period2 > 0:
+                if period1 is not None and period1 > 0 and period2 is not None and period2 > 0:
                     power1 = calculate_wave_power(height1, period1)
                     power2 = calculate_wave_power(height2, period2)
                     
