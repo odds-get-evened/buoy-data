@@ -28,14 +28,14 @@ For ML features, install with the `ml` extras:
 pip install -e ".[ml]"
 ```
 
-### Using pip (with requirements.txt)
+### Using pip (with requirements files)
 
-Basic installation:
+Basic installation (core features only):
 ```bash
-pip install requests sqlalchemy
+pip install -r requirements-core.txt
 ```
 
-For ML features:
+Full installation (including ML features):
 ```bash
 pip install -r requirements.txt
 ```
