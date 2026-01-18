@@ -60,16 +60,28 @@ class DataCollector:
                 data = buoy.get_data()
 
                 # Extract relevant data
+                # Convert empty strings to None to ensure proper type handling
+                def to_numeric_or_none(value):
+                    """Convert value to numeric or None if empty string or None."""
+                    if value in (None, ''):
+                        return None
+                    if isinstance(value, (int, float)):
+                        return float(value)
+                    try:
+                        return float(value)
+                    except (ValueError, TypeError):
+                        return None
+                
                 record = {
                     'buoy_id': buoy_id,
                     'timestamp': data.get('timestamp', 0),
                     'wind_direction_deg': data.get('wind_direction', {}).get('degree', None),
                     'wind_speed': data.get('wind_speed', None),
                     'gusts': data.get('gusts', None),
-                    'wave_height_m': data.get('wave_height', {}).get('metric', None),
+                    'wave_height_m': to_numeric_or_none(data.get('wave_height', {}).get('metric', None)),
                     'wave_height_ft': data.get('wave_height', {}).get('stnd', None),
-                    'dominant_wave_period': data.get('dominant_wave_period', None),
-                    'avg_wave_period': data.get('avg_wave_period', None),
+                    'dominant_wave_period': to_numeric_or_none(data.get('dominant_wave_period', None)),
+                    'avg_wave_period': to_numeric_or_none(data.get('avg_wave_period', None)),
                     'mean_wave_direction_deg': data.get('mean_wave_direction', {}).get('degree', None),
                     'barometer': data.get('barometer', None),
                     'air_temp_c': data.get('air_temp', {}).get('celsius', None),

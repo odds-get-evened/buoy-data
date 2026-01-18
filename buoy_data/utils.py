@@ -565,15 +565,21 @@ def identify_significant_gradients(
             if not all(field in station1 and field in station2 for field in required_fields):
                 continue
             
+            # Convert wave heights to float and skip if invalid
+            try:
+                height1 = float(station1['wave_height_m']) if station1['wave_height_m'] not in (None, '') else None
+                height2 = float(station2['wave_height_m']) if station2['wave_height_m'] not in (None, '') else None
+            except (ValueError, TypeError):
+                continue
+            
             # Skip if wave heights are missing or invalid
-            if (station1['wave_height_m'] is None or station2['wave_height_m'] is None or
-                station1['wave_height_m'] <= 0 or station2['wave_height_m'] <= 0):
+            if height1 is None or height2 is None or height1 <= 0 or height2 <= 0:
                 continue
             
             # Calculate wave height gradient
             gradient_info = calculate_spatial_gradient(
-                station1['wave_height_m'],
-                station2['wave_height_m'],
+                height1,
+                height2,
                 station1['latitude'],
                 station1['longitude'],
                 station2['latitude'],
@@ -588,22 +594,30 @@ def identify_significant_gradients(
                 'distance_km': gradient_info['distance_km'],
                 'value_diff': gradient_info['value_diff'],
                 'direction': gradient_info['direction'],
-                'wave_height_1': station1['wave_height_m'],
-                'wave_height_2': station2['wave_height_m']
+                'wave_height_1': height1,
+                'wave_height_2': height2
             }
             
             # Calculate energy differential if wave periods are available
             if ('wave_period' in station1 and 'wave_period' in station2 and
-                station1['wave_period'] is not None and station2['wave_period'] is not None and
-                station1['wave_period'] > 0 and station2['wave_period'] > 0):
+                station1['wave_period'] is not None and station2['wave_period'] is not None):
                 
-                power1 = calculate_wave_power(station1['wave_height_m'], station1['wave_period'])
-                power2 = calculate_wave_power(station2['wave_height_m'], station2['wave_period'])
+                # Convert wave periods to float, handling string values
+                try:
+                    period1 = float(station1['wave_period']) if station1['wave_period'] not in (None, '') else None
+                    period2 = float(station2['wave_period']) if station2['wave_period'] not in (None, '') else None
+                except (ValueError, TypeError):
+                    period1 = None
+                    period2 = None
                 
-                gradient_entry['wave_power_1'] = power1
-                gradient_entry['wave_power_2'] = power2
-                gradient_entry['energy_differential'] = abs(power2 - power1)
-                gradient_entry['energy_flow_direction'] = station1['station_id'] if power1 > power2 else station2['station_id']
+                if period1 and period1 > 0 and period2 and period2 > 0:
+                    power1 = calculate_wave_power(height1, period1)
+                    power2 = calculate_wave_power(height2, period2)
+                    
+                    gradient_entry['wave_power_1'] = power1
+                    gradient_entry['wave_power_2'] = power2
+                    gradient_entry['energy_differential'] = abs(power2 - power1)
+                    gradient_entry['energy_flow_direction'] = station1['station_id'] if power1 > power2 else station2['station_id']
             
             gradients.append(gradient_entry)
     

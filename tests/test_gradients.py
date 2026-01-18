@@ -254,6 +254,24 @@ class TestIdentifySignificantGradients(unittest.TestCase):
             self.assertNotEqual(grad['station1'], 'B')
             self.assertNotEqual(grad['station2'], 'B')
     
+    def test_identify_gradients_string_wave_height(self):
+        """Test handling of string wave height values (regression test for type error)."""
+        stations = [
+            {'station_id': 'A', 'latitude': 40.0, 'longitude': -74.0, 'wave_height_m': '2.0'},
+            {'station_id': 'B', 'latitude': 40.5, 'longitude': -74.0, 'wave_height_m': ''},
+            {'station_id': 'C', 'latitude': 41.0, 'longitude': -74.0, 'wave_height_m': '1.5'}
+        ]
+        
+        # This should not raise a TypeError when comparing with 0
+        # String wave heights should be handled gracefully
+        gradients = identify_significant_gradients(stations, threshold_percentile=0)
+        
+        # Empty string should be treated as invalid, so B should be skipped
+        # We should get gradients only between A and C if strings are properly converted
+        for grad in gradients:
+            self.assertNotEqual(grad['station1'], 'B')
+            self.assertNotEqual(grad['station2'], 'B')
+    
     def test_identify_gradients_energy_flow(self):
         """Test energy flow direction calculation."""
         stations = [
