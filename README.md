@@ -498,6 +498,10 @@ The forecasting model uses:
 - **Lag features**: Historical values (1h, 3h, 6h, 12h, 24h)
 - **Rolling statistics**: Moving averages and standard deviations
 - **Inter-buoy relationships**: Weighted averages from nearby buoys
+- **Gradient features**: Spatial gradients of wave height between neighboring buoys (max, min, average, magnitude)
+- **Energy features**: Wave energy density and wave power calculations based on wave dynamics
+
+These features capture both temporal evolution and spatial patterns, including energy differentials that drive wave dynamics according to Carnot's principle.
 
 ### ML API Reference
 
@@ -511,6 +515,7 @@ High-level interface for wave height forecasting.
 - `predict_wave_height(buoy_id, current_conditions)` - Predict single buoy
 - `forecast_between_buoys(buoy_ids)` - Forecast multiple buoys
 - `get_regional_summary(buoy_ids)` - Get regional statistics
+- `analyze_gradients(buoy_ids, threshold_percentile, include_energy)` - Analyze spatial gradients and energy differentials
 
 #### DataCollector
 
@@ -674,7 +679,7 @@ Make predictions with trained models.
 
 **Usage:**
 ```bash
-python predict.py [--buoys BUOY_ID [BUOY_ID ...] | --lat LAT --lon LON --radius RADIUS] --model PATH --mode {current,forecast,summary}
+python predict.py [--buoys BUOY_ID [BUOY_ID ...] | --lat LAT --lon LON --radius RADIUS] --model PATH --mode {current,forecast,summary,gradients}
 ```
 
 **Options:**
@@ -683,13 +688,15 @@ python predict.py [--buoys BUOY_ID [BUOY_ID ...] | --lat LAT --lon LON --radius 
 - `--lon LON` - Longitude of center point for location-based search (requires --lat and --radius)
 - `--radius RADIUS` - Search radius in meters from center point (requires --lat and --lon)
 - `--model PATH` - Path to trained model (default: models/wave_predictor.pkl)
-- `--mode {current,forecast,summary}` - Prediction mode (default: forecast)
+- `--mode {current,forecast,summary,gradients}` - Prediction mode (default: forecast)
+- `--gradient-threshold PERCENT` - Percentile threshold for significant gradients (default: 75, only used with gradients mode)
 - `--db CONNECTION_STRING` - Database connection string (default: sqlite:///buoy_ml_data.db)
 
 **Modes:**
 - `current` - Show current readings for specified buoys
 - `forecast` - Predict wave heights with confidence intervals
 - `summary` - Regional summary with statistics and high wave alerts
+- `gradients` - Analyze spatial gradients and energy differentials between buoys
 
 **Examples:**
 ```bash
@@ -702,12 +709,23 @@ python predict.py --buoys 44017 44008 44013 --mode forecast
 # Regional summary
 python predict.py --buoys 44017 44008 44013 44025 --mode summary
 
+# Analyze energy gradients and differentials
+python predict.py --buoys 44017 44008 44013 44025 --mode gradients
+
 # Get forecast for all buoys near Boston (within 100km)
 python predict.py \
     --lat 42.3601 \
     --lon -71.0589 \
     --radius 100000 \
     --mode forecast
+
+# Analyze gradients for buoys near New York (within 200km)
+python predict.py \
+    --lat 40.7128 \
+    --lon -74.0060 \
+    --radius 200000 \
+    --mode gradients \
+    --gradient-threshold 80
 
 # Get regional summary for buoys near Miami (within 150km)
 python predict.py \
@@ -716,6 +734,128 @@ python predict.py \
     --radius 150000 \
     --mode summary
 ```
+
+### Wave Gradient and Energy Differential Analysis
+
+The package now includes advanced features for analyzing spatial gradients and energy differentials between buoy stations. This functionality is based on wave dynamics principles and Carnot's law, which states that energy flows from high to low potential, driving wave motion and energy transfer.
+
+#### Understanding Energy Differentials
+
+Wave energy differentials represent the spatial variation in wave power across a region, which can indicate:
+- **Active wave dynamics**: Areas where wave energy is being transferred or transformed
+- **Energy hotspots**: Locations with high energy concentration or rapid energy changes
+- **Potential for energy extraction**: Areas suitable for wave energy harvesting
+- **Wave propagation patterns**: How waves travel and evolve across a region
+
+#### Key Concepts
+
+**Wave Energy Density**: The energy per unit area stored in ocean waves:
+```
+E = (1/8) × ρ × g × H²
+```
+Where:
+- ρ = water density (1025 kg/m³)
+- g = gravitational acceleration (9.81 m/s²)
+- H = significant wave height (m)
+
+**Wave Power**: The rate of energy transport per meter of wave crest:
+```
+P = E × Cg
+```
+Where Cg is the group velocity (for deep water: gT/4π)
+
+**Spatial Gradient**: The rate of change of wave height or energy per unit distance:
+```
+∇H = (H₂ - H₁) / distance
+```
+
+#### Using Gradient Analysis
+
+**Python API:**
+
+```python
+from buoy_data.ml import BuoyForecaster
+
+# Initialize forecaster
+with BuoyForecaster(model_path='models/wave_predictor.pkl') as forecaster:
+    # Analyze gradients for a region
+    analysis = forecaster.analyze_gradients(
+        buoy_ids=['44017', '44008', '44013', '44025'],
+        threshold_percentile=75.0,  # Report top 25% of gradients
+        include_energy=True
+    )
+    
+    # Access significant gradients
+    for grad in analysis['significant_gradients']:
+        print(f"{grad['station1']} → {grad['station2']}")
+        print(f"  Wave height gradient: {grad['gradient']:.4f} m/km")
+        print(f"  Distance: {grad['distance_km']:.1f} km")
+        print(f"  Energy differential: {grad['energy_differential']:.2f} W/m")
+        print(f"  Energy flow: from {grad['energy_flow_direction']}")
+    
+    # View summary statistics
+    summary = analysis['summary']
+    print(f"Significant gradient pairs: {summary['significant_pairs']}")
+    print(f"Max gradient: {summary['max_gradient']:.4f} m/km")
+    
+    # Identify energy hotspots
+    if 'energy_hotspots' in summary:
+        for hotspot in summary['energy_hotspots']:
+            print(f"Station {hotspot['station_id']}: {hotspot['gradient_count']} connections")
+```
+
+**CLI Tool:**
+
+```bash
+# Analyze gradients for specific buoys
+python predict.py \
+    --buoys 44017 44008 44013 44025 \
+    --mode gradients \
+    --gradient-threshold 75
+
+# Find and analyze gradients near a location
+python predict.py \
+    --lat 40.7128 \
+    --lon -74.0060 \
+    --radius 200000 \
+    --mode gradients \
+    --gradient-threshold 80
+```
+
+#### Interpreting Results
+
+**High Gradient Magnitude**: Indicates rapid changes in wave conditions over short distances, suggesting:
+- Active wave dynamics and energy transfer
+- Potential wave-wave interactions
+- Bathymetric effects (shallow water, continental shelf)
+- Wind field variations
+
+**Energy Flow Direction**: Shows the dominant direction of energy transfer:
+- From station with higher wave power → station with lower wave power
+- Follows Carnot's principle of energy flowing from high to low potential
+- Useful for predicting wave propagation
+
+**Energy Hotspots**: Buoys involved in many significant gradients:
+- Central locations in active wave fields
+- Good candidates for detailed monitoring
+- Potential sites for wave energy extraction
+
+#### Applications
+
+1. **Wave Energy Resource Assessment**: Identify optimal locations for wave energy converters
+2. **Maritime Safety**: Detect areas with rapidly changing wave conditions
+3. **Coastal Management**: Understand wave energy distribution near shores
+4. **Research**: Study wave dynamics and energy transfer mechanisms
+5. **Model Validation**: Compare predicted vs. actual energy gradients
+
+#### Enhanced ML Features
+
+The gradient analysis automatically enhances ML model predictions with:
+- Spatial gradient features (max, min, average gradients to neighbors)
+- Wave energy density and power calculations
+- Gradient magnitude features for better predictions
+
+These features are automatically included when training models and making predictions.
 
 ### Station Discovery and Region Filtering
 

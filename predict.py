@@ -46,9 +46,15 @@ def main():
     )
     parser.add_argument(
         '--mode',
-        choices=['current', 'forecast', 'summary'],
+        choices=['current', 'forecast', 'summary', 'gradients'],
         default='forecast',
-        help='Query mode: current (readings only), forecast (with predictions), summary (regional)'
+        help='Query mode: current (readings only), forecast (with predictions), summary (regional), gradients (energy differentials)'
+    )
+    parser.add_argument(
+        '--gradient-threshold',
+        type=float,
+        default=75.0,
+        help='Percentile threshold for significant gradients (default: 75)'
     )
     parser.add_argument(
         '--output',
@@ -114,6 +120,16 @@ def main():
                 # Get regional summary
                 logger.info(f"Generating regional summary for {len(args.buoys)} buoys...")
                 output = forecaster.get_regional_summary(args.buoys)
+            
+            elif args.mode == 'gradients':
+                # Analyze energy gradients and differentials
+                logger.info(f"Analyzing spatial gradients for {len(args.buoys)} buoys...")
+                output = forecaster.analyze_gradients(
+                    args.buoys,
+                    threshold_percentile=args.gradient_threshold,
+                    include_energy=True
+                )
+                logger.info(f"Found {len(output['significant_gradients'])} significant gradients")
 
             # Output results
             if args.output:

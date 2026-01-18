@@ -346,6 +346,128 @@ class BuoyForecaster:
             summary['high_wave_alerts'] = high_wave_buoys['buoy_id'].tolist()
 
         return summary
+    
+    def analyze_gradients(
+        self,
+        buoy_ids: List[str],
+        threshold_percentile: float = 75.0,
+        include_energy: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Analyze spatial gradients and energy differentials between buoy stations.
+        
+        This method identifies significant energy differentials that drive wave dynamics,
+        following Carnot's principle where energy flows from high to low potential.
+        Useful for identifying areas with active wave dynamics and potential energy extraction.
+        
+        Args:
+            buoy_ids: List of buoy station IDs
+            threshold_percentile: Percentile threshold for significant gradients (default: 75)
+            include_energy: Whether to calculate energy differentials (default: True)
+        
+        Returns:
+            Dictionary containing:
+            - 'significant_gradients': List of significant gradient pairs
+            - 'summary': Summary statistics
+            - 'energy_hotspots': Buoy IDs with highest energy differentials
+        """
+        from ..utils import identify_significant_gradients
+        
+        # Get current data
+        current_data = self.get_current_readings(buoy_ids)
+        
+        if current_data.empty:
+            raise ValueError("No current data available for gradient analysis")
+        
+        # Prepare station data for gradient analysis
+        # Cache station lookups for efficiency
+        from ..station import Station
+        station_cache = {}
+        
+        stations_data = []
+        for idx, row in current_data.iterrows():
+            buoy_id = row['buoy_id']
+            
+            station_dict = {
+                'station_id': buoy_id,
+                'wave_height_m': row.get('wave_height_m'),
+                'latitude': None,
+                'longitude': None
+            }
+            
+            # Get station coordinates from cache or create new Station object
+            try:
+                if buoy_id not in station_cache:
+                    station_cache[buoy_id] = Station(buoy_id)
+                station = station_cache[buoy_id]
+                station_dict['latitude'] = station.get_latitude()
+                station_dict['longitude'] = station.get_longitude()
+            except (KeyError, AttributeError, ValueError, TypeError) as e:
+                logger.warning(f"Could not get coordinates for {buoy_id}: {e}")
+                continue
+            
+            # Add wave period if available and energy calculation is requested
+            if include_energy:
+                if 'dominant_wave_period' in row and pd.notna(row['dominant_wave_period']):
+                    station_dict['wave_period'] = row['dominant_wave_period']
+                elif 'avg_wave_period' in row and pd.notna(row['avg_wave_period']):
+                    station_dict['wave_period'] = row['avg_wave_period']
+            
+            stations_data.append(station_dict)
+        
+        if len(stations_data) < 2:
+            raise ValueError("Need at least 2 stations with valid data for gradient analysis")
+        
+        # Identify significant gradients
+        significant = identify_significant_gradients(stations_data, threshold_percentile)
+        
+        # Calculate summary statistics
+        summary = {
+            'total_pairs': len(stations_data) * (len(stations_data) - 1) // 2,
+            'significant_pairs': len(significant),
+            'threshold_percentile': threshold_percentile
+        }
+        
+        if significant:
+            summary['max_gradient'] = float(max(g['gradient_abs'] for g in significant))
+            summary['mean_gradient'] = float(np.mean([g['gradient_abs'] for g in significant]))
+            summary['max_value_diff'] = float(max(g['value_diff'] for g in significant))
+        
+        # Identify energy hotspots (buoys involved in most significant gradients)
+        energy_hotspots = {}
+        if include_energy and significant:
+            for grad in significant:
+                if 'energy_differential' in grad:
+                    station1 = grad['station1']
+                    station2 = grad['station2']
+                    
+                    if station1 not in energy_hotspots:
+                        energy_hotspots[station1] = {'count': 0, 'total_energy_diff': 0.0}
+                    if station2 not in energy_hotspots:
+                        energy_hotspots[station2] = {'count': 0, 'total_energy_diff': 0.0}
+                    
+                    energy_hotspots[station1]['count'] += 1
+                    energy_hotspots[station2]['count'] += 1
+                    energy_hotspots[station1]['total_energy_diff'] += grad['energy_differential']
+                    energy_hotspots[station2]['total_energy_diff'] += grad['energy_differential']
+            
+            # Sort by total energy differential
+            hotspot_list = [
+                {
+                    'station_id': station_id,
+                    'gradient_count': data['count'],
+                    'total_energy_differential': data['total_energy_diff'],
+                    'avg_energy_differential': data['total_energy_diff'] / data['count']
+                }
+                for station_id, data in energy_hotspots.items()
+            ]
+            hotspot_list.sort(key=lambda x: x['total_energy_differential'], reverse=True)
+            summary['energy_hotspots'] = hotspot_list[:5]  # Top 5
+        
+        return {
+            'significant_gradients': significant,
+            'summary': summary
+        }
 
     def close(self):
         """Close data collector connection."""

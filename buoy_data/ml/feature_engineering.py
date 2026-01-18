@@ -6,6 +6,7 @@ import pandas as pd
 from typing import List, Tuple, Optional
 from datetime import datetime
 from ..station import Station
+from ..utils import calculate_wave_energy_density, calculate_wave_power
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +166,61 @@ class FeatureEngineer:
 
         return df
 
+    def add_energy_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Add wave energy and power features based on wave dynamics.
+        
+        These features capture the energy content and flux of waves, which is
+        important for understanding energy differentials (Carnot's principle).
+        
+        Args:
+            df: DataFrame with wave data
+        
+        Returns:
+            DataFrame with added energy features
+        """
+        df = df.copy()
+        
+        # Calculate wave energy density and power where data is available
+        if 'wave_height_m' in df.columns:
+            # Use dominant wave period if available, otherwise avg wave period
+            period_col = None
+            if 'dominant_wave_period' in df.columns:
+                period_col = 'dominant_wave_period'
+            elif 'avg_wave_period' in df.columns:
+                period_col = 'avg_wave_period'
+            
+            if period_col:
+                # Convert to numeric
+                df['wave_height_m'] = pd.to_numeric(df['wave_height_m'], errors='coerce')
+                df[period_col] = pd.to_numeric(df[period_col], errors='coerce')
+                
+                # Calculate energy density and power for each row
+                energy_density = []
+                wave_power = []
+                
+                for idx, row in df.iterrows():
+                    height = row['wave_height_m']
+                    period = row[period_col]
+                    
+                    if pd.notna(height) and pd.notna(period) and height > 0 and period > 0:
+                        energy_density.append(calculate_wave_energy_density(height, period))
+                        wave_power.append(calculate_wave_power(height, period))
+                    else:
+                        energy_density.append(0.0)
+                        wave_power.append(0.0)
+                
+                df['wave_energy_density'] = energy_density
+                df['wave_power'] = wave_power
+                
+                # Add energy-related derived features
+                # Energy density per meter of depth (if depth available)
+                if 'depth' in df.columns:
+                    df['depth'] = pd.to_numeric(df['depth'], errors='coerce')
+                    df['energy_per_depth'] = df['wave_energy_density'] / (df['depth'] + 1.0)
+        
+        return df
+
     def add_lag_features(
         self,
         df: pd.DataFrame,
@@ -287,6 +343,20 @@ class FeatureEngineer:
                     weights = [1 / (d + 1) for d in distances]
                     total_weight = sum(weights)
                     weighted_avg = sum(h * w for h, w in zip(neighbor_heights, weights)) / total_weight
+                    
+                    # Calculate gradients to nearest neighbors
+                    # Note: distances are in km from calculate_distance() which returns km
+                    # So gradients are in meters of wave height per km of distance
+                    gradients = []
+                    for j, (dist, height) in enumerate(zip(distances, neighbor_heights)):
+                        if dist > 0:  # Avoid division by zero
+                            gradient = (height - wave_heights[i]) / dist  # m/km
+                            gradients.append(gradient)
+                    
+                    # Gradient statistics
+                    max_gradient = max(gradients) if gradients else 0
+                    min_gradient = min(gradients) if gradients else 0
+                    avg_gradient = np.mean(gradients) if gradients else 0
 
                     inter_buoy_data.append({
                         'buoy_id': buoy_id,
@@ -294,7 +364,11 @@ class FeatureEngineer:
                         'neighbor_wave_avg': weighted_avg,
                         'neighbor_wave_std': np.std(neighbor_heights) if len(neighbor_heights) > 1 else 0,
                         'min_neighbor_distance': min(distances),
-                        'num_neighbors': len(distances)
+                        'num_neighbors': len(distances),
+                        'max_wave_gradient': max_gradient,
+                        'min_wave_gradient': min_gradient,
+                        'avg_wave_gradient': avg_gradient,
+                        'gradient_magnitude': abs(avg_gradient)
                     })
 
         if inter_buoy_data:
@@ -342,6 +416,9 @@ class FeatureEngineer:
 
         # Add wind features
         df = self.add_wind_features(df)
+        
+        # Add energy features
+        df = self.add_energy_features(df)
 
         # Add lag features
         if add_lags:
