@@ -3,6 +3,8 @@
 
 import argparse
 import logging
+import secrets
+from datetime import datetime
 from pathlib import Path
 from sklearn.model_selection import RandomizedSearchCV
 from scipy.stats import randint, uniform
@@ -207,16 +209,11 @@ def main():
 
     # Generate timestamped filename if not retraining
     if not args.retrain:
-        from datetime import datetime
-        import zlib
-        import random
-        
         # Generate date string
         date_str = datetime.now().strftime('%Y%m%d')
         
-        # Generate random CRC32 hash string
-        random_bytes = str(random.getrandbits(64)).encode('utf-8')
-        crc32_hash = format(zlib.crc32(random_bytes) & 0xffffffff, '08x')
+        # Generate random 8-character hex string
+        random_hash = secrets.token_hex(4)
         
         # Parse the output path and insert the timestamp
         output_path = Path(args.output)
@@ -225,7 +222,7 @@ def main():
         parent = output_path.parent
         
         # Create new filename with timestamp
-        new_filename = f"{stem}_{date_str}-{crc32_hash}{suffix}"
+        new_filename = f"{stem}_{date_str}-{random_hash}{suffix}"
         args.output = str(parent / new_filename)
         
         logger.info(f"Generated unique model filename: {args.output}")

@@ -1,11 +1,10 @@
 """Tests for training and retraining functionality."""
 
 import pytest
+import secrets
 import tempfile
 from pathlib import Path
 from datetime import datetime
-import zlib
-import random
 
 from buoy_data.ml import BuoyForecaster
 from buoy_data.ml.wave_predictor import WaveHeightPredictor
@@ -15,20 +14,19 @@ def test_filename_generation_pattern():
     """Test that the filename generation creates expected format."""
     # Simulate the filename generation logic
     date_str = datetime.now().strftime('%Y%m%d')
-    random_bytes = str(random.getrandbits(64)).encode('utf-8')
-    crc32_hash = format(zlib.crc32(random_bytes) & 0xffffffff, '08x')
+    random_hash = secrets.token_hex(4)
     
     output_path = Path('models/wave_predictor.pkl')
     stem = output_path.stem
     suffix = output_path.suffix
     parent = output_path.parent
     
-    new_filename = f"{stem}_{date_str}-{crc32_hash}{suffix}"
+    new_filename = f"{stem}_{date_str}-{random_hash}{suffix}"
     result = str(parent / new_filename)
     
     # Verify format
     assert date_str in result
-    assert len(crc32_hash) == 8
+    assert len(random_hash) == 8
     assert result.startswith('models/wave_predictor_')
     assert result.endswith('.pkl')
     assert '-' in result
@@ -75,11 +73,10 @@ def test_unique_filenames_are_different():
     
     for _ in range(10):
         date_str = datetime.now().strftime('%Y%m%d')
-        random_bytes = str(random.getrandbits(64)).encode('utf-8')
-        crc32_hash = format(zlib.crc32(random_bytes) & 0xffffffff, '08x')
+        random_hash = secrets.token_hex(4)
         
         output_path = Path('models/wave_predictor.pkl')
-        new_filename = f"{output_path.stem}_{date_str}-{crc32_hash}{output_path.suffix}"
+        new_filename = f"{output_path.stem}_{date_str}-{random_hash}{output_path.suffix}"
         filenames.add(new_filename)
     
     # All filenames should be unique

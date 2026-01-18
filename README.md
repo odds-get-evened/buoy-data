@@ -309,7 +309,7 @@ python train_model.py --advanced --tune --days 21 --buoys 44017 44008 44013 4402
 **Retrain Existing Model:**
 ```bash
 # Retrain an existing model with new data
-python train_model.py --retrain --output models/wave_predictor_20260118-abc12345.pkl --days 7
+python train_model.py --retrain --output models/wave_predictor_20260118-a1b2c3d4.pkl --days 7
 ```
 
 **Analyze Model Performance:**
@@ -338,7 +338,7 @@ python predict.py --buoys 44017 44008 44013 --model models/wave_predictor.pkl --
 # Train with default parameters (7 days, 4 buoys)
 python train_model.py --buoys 44017 44008 44013 44025 --days 7
 # Note: Model will be saved with a unique timestamped filename like:
-# models/wave_predictor_20260118-abc12345.pkl
+# models/wave_predictor_20260118-a1b2c3d4.pkl
 ```
 
 **Option B: Advanced Training (Recommended)**
@@ -361,7 +361,7 @@ python train_model.py --advanced --tune \
 ```bash
 # Retrain an existing model with new data (preserves model structure)
 python train_model.py --retrain \
-    --output models/wave_predictor_20260118-abc12345.pkl \
+    --output models/wave_predictor_20260118-a1b2c3d4.pkl \
     --days 7
 ```
 
@@ -471,7 +471,7 @@ python train_model.py --advanced --tune --days 21 --buoys 44017 44008 44013 4402
 **Step 4: Re-analyze**
 ```bash
 # Use the most recent timestamped model file
-python analyze_model.py --model models/wave_predictor_20260118-abc12345.pkl
+python analyze_model.py --model models/wave_predictor_20260118-a1b2c3d4.pkl
 ```
 
 **Step 4: Re-analyze**
@@ -610,7 +610,7 @@ python train_model.py [OPTIONS]
 - `--retrain` - Retrain existing model instead of creating new one (requires existing model at --output path)
 - `--model-type {random_forest,gradient_boosting}` - Model type (default: random_forest)
 - `--output PATH` - Path template for saving trained model (default: models/wave_predictor.pkl)
-  - **Note:** Unless using `--retrain`, a unique timestamp is automatically appended (e.g., `models/wave_predictor_20260118-abc12345.pkl`)
+  - **Note:** Unless using `--retrain`, a unique timestamp is automatically appended (e.g., `models/wave_predictor_20260118-a1b2c3d4.pkl`)
 - `--db CONNECTION_STRING` - Database connection string (default: sqlite:///buoy_ml_data.db)
 - `--use-cache` - Use cached data from database instead of re-downloading
 
@@ -633,7 +633,7 @@ python train_model.py --advanced --tune \
 
 # Retrain an existing model
 python train_model.py --retrain \
-    --output models/wave_predictor_20260118-abc12345.pkl \
+    --output models/wave_predictor_20260118-a1b2c3d4.pkl \
     --days 7
 
 # Train with all available stations

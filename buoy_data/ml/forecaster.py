@@ -1,6 +1,7 @@
 """High-level forecasting interface for buoy wave heights."""
 
 import logging
+from pathlib import Path
 from typing import List, Dict, Any, Optional
 import pandas as pd
 import numpy as np
@@ -134,7 +135,6 @@ class BuoyForecaster:
 
         # Load existing model or create new one
         if retrain:
-            from pathlib import Path
             if Path(save_path).exists():
                 logger.info(f"Loading existing model from {save_path} for retraining...")
                 self.predictor = WaveHeightPredictor.load(save_path)
