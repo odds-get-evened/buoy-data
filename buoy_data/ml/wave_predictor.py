@@ -1,6 +1,7 @@
 """Machine learning model for wave height prediction."""
 
 import logging
+import warnings
 from pathlib import Path
 from typing import Optional, Dict, Any, Tuple
 import numpy as np
@@ -104,8 +105,12 @@ class WaveHeightPredictor:
         )
 
         # Scale features
-        X_train_scaled = self.scaler.fit_transform(X_train)
-        X_test_scaled = self.scaler.transform(X_test)
+        # Suppress warnings from sklearn's StandardScaler when it encounters zero variance features
+        # These warnings are expected and don't affect model performance (sklearn handles them gracefully)
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', message='invalid value encountered in divide', category=RuntimeWarning)
+            X_train_scaled = self.scaler.fit_transform(X_train)
+            X_test_scaled = self.scaler.transform(X_test)
 
         # Store feature columns
         self.feature_columns = X.columns.tolist()
@@ -186,7 +191,10 @@ class WaveHeightPredictor:
         X = X.fillna(X.median())
 
         # Scale features
-        X_scaled = self.scaler.transform(X)
+        # Suppress warnings from sklearn's StandardScaler when it encounters zero variance features
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', message='invalid value encountered in divide', category=RuntimeWarning)
+            X_scaled = self.scaler.transform(X)
 
         # Make predictions
         predictions = self.model.predict(X_scaled)
@@ -215,7 +223,12 @@ class WaveHeightPredictor:
         # Prepare data
         X = df[self.feature_columns].copy()
         X = X.fillna(X.median())
-        X_scaled = self.scaler.transform(X)
+        
+        # Scale features
+        # Suppress warnings from sklearn's StandardScaler when it encounters zero variance features
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', message='invalid value encountered in divide', category=RuntimeWarning)
+            X_scaled = self.scaler.transform(X)
 
         # Get predictions from all trees
         tree_predictions = np.array([
