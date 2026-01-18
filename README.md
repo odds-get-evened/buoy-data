@@ -2,6 +2,25 @@
 
 A Python package that aggregates and retrieves data from NOAA's National Data Buoy Center (NDBC).
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Installation](#installation)
+- [Requirements](#requirements)
+- [Quick Start](#quick-start)
+- [API Reference](#api-reference)
+- [Data Format](#data-format)
+- [Examples](#examples)
+- [Development](#development)
+- [Machine Learning Features](#machine-learning-features)
+  - [Wave Height Forecasting](#wave-height-forecasting)
+  - [Complete ML Workflow](#complete-ml-workflow)
+  - [ML API Reference](#ml-api-reference)
+  - [CLI Tools Reference](#cli-tools-reference)
+- [Station Discovery](#station-discovery-and-region-filtering)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## Overview
 
 This package provides a simple interface to fetch real-time and historical buoy data from NOAA's National Data Buoy Center. It supports:
@@ -11,6 +30,9 @@ This package provides a simple interface to fetch real-time and historical buoy 
 - Station metadata and information
 - Database storage with SQLAlchemy
 - Automatic unit conversions (metric/imperial)
+- **Optional Machine Learning features** for wave height forecasting
+- Location-based station discovery (find buoys by lat/lon/radius)
+- Region-based filtering (Northeast, Southeast, Caribbean, Pacific, Great Lakes, Hawaii)
 
 ## Installation
 
@@ -966,6 +988,96 @@ python train_model_advanced.py --all-stations --region northeast --days 14
 - **44007** - Portland, ME (12 NM SE)
 
 Find more stations at: https://www.ndbc.noaa.gov/
+
+## Troubleshooting
+
+### Common Issues
+
+**ImportError: No module named 'pandas' (or 'numpy', 'scikit-learn')**
+- The ML features require optional dependencies. Install with: `pip install -e ".[ml]"`
+
+**404 Errors when accessing buoy data**
+- Some buoy stations go offline or stop reporting. Use location-based search (`--lat`, `--lon`, `--radius`) to automatically find active nearby stations.
+
+**Model confidence is low (<70%)**
+- Collect more historical data: increase `--days` parameter (recommended: 14-21+ days)
+- Add more buoy stations for better spatial coverage
+- Use `--tune` flag for hyperparameter optimization
+- See [Improving Model Confidence](#improving-model-confidence) section for details
+
+**Database connection errors**
+- Check that the database path is writable
+- Default is `sqlite:///buoy_ml_data.db` in the current directory
+- For custom paths, use `--db` parameter with full connection string
+
+## Package Structure
+
+```
+buoy-data/
+├── buoy_data/              # Main package directory
+│   ├── __init__.py         # Package initialization and exports
+│   ├── buoy_data.py        # Base buoy data class
+│   ├── buoy_real_time.py   # Real-time data retrieval
+│   ├── buoy_hourly.py      # Historical hourly data
+│   ├── station.py          # Station metadata and information
+│   ├── stations_data.py    # Station database
+│   ├── conversions.py      # Unit conversion utilities
+│   ├── database.py         # Database models and ORM
+│   ├── utils.py            # Utility functions (geospatial, validation)
+│   └── ml/                 # Machine learning module (optional)
+│       ├── __init__.py
+│       ├── data_collector.py    # Historical data collection
+│       ├── feature_engineering.py # Feature creation for ML
+│       ├── wave_predictor.py     # ML prediction models
+│       └── forecaster.py         # High-level forecasting interface
+├── train_model.py          # Basic model training CLI
+├── train_model_advanced.py # Advanced training with tuning
+├── predict.py              # Prediction CLI tool
+├── analyze_model.py        # Model diagnostics tool
+├── download_data.py        # Data download utility
+├── examples.py             # Core feature examples
+├── examples_ml.py          # ML feature examples
+└── tests/                  # Test suite
+
+```
+
+## Quick Reference
+
+### Common Commands
+
+| Task | Command |
+|------|---------|
+| **Install (core only)** | `pip install -e .` |
+| **Install (with ML)** | `pip install -e ".[ml]"` |
+| **Run core examples** | `python examples.py` |
+| **Run ML examples** | `python examples_ml.py` |
+| **Train basic model** | `python train_model.py --buoys 44017 44008 --days 7` |
+| **Train optimized model** | `python train_model_advanced.py --tune --days 21` |
+| **Analyze model** | `python analyze_model.py --model models/wave_predictor.pkl` |
+| **Make predictions** | `python predict.py --buoys 44017 44008 --mode forecast` |
+| **Find nearby buoys** | `python predict.py --lat 40.7 --lon -74.0 --radius 100000 --mode current` |
+| **Run tests (core)** | `pytest tests/ --ignore=tests/test_analyze_model.py` |
+| **Run all tests** | `pytest tests/` (requires ML dependencies) |
+
+### Key Python Classes
+
+| Class | Purpose | Module |
+|-------|---------|--------|
+| `BuoyRealTime` | Fetch real-time buoy data | `from buoy_data import BuoyRealTime` |
+| `BuoyHourly` | Fetch hourly historical data | `from buoy_data import BuoyHourly` |
+| `Station` | Station metadata and location | `from buoy_data import Station` |
+| `BuoyDataDB` | Database storage interface | `from buoy_data import BuoyDataDB` |
+| `BuoyForecaster` | ML wave height forecasting | `from buoy_data.ml import BuoyForecaster` |
+| `DataCollector` | ML data collection | `from buoy_data.ml import DataCollector` |
+
+### Useful Functions
+
+| Function | Purpose | Import |
+|----------|---------|--------|
+| `get_available_stations()` | List all active NOAA stations | `from buoy_data import get_available_stations` |
+| `filter_stations_by_region()` | Filter stations by geographic region | `from buoy_data import filter_stations_by_region` |
+| `find_stations_by_location()` | Find stations near lat/lon | `from buoy_data import find_stations_by_location` |
+| `haversine_distance()` | Calculate distance between coordinates | `from buoy_data import haversine_distance` |
 
 ## Links
 
