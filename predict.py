@@ -5,6 +5,7 @@ import argparse
 import json
 import logging
 from buoy_data.ml import BuoyForecaster
+from buoy_data import find_stations_by_location
 
 logging.basicConfig(
     level=logging.INFO,
@@ -82,7 +83,6 @@ def main():
     # Determine which buoys to use
     if args.lat is not None and args.lon is not None and args.radius is not None:
         # Location-based search
-        from buoy_data import find_stations_by_location
         try:
             logger.info(f"Searching for buoys within {args.radius}m of ({args.lat}, {args.lon})...")
             nearby_stations = find_stations_by_location(args.lat, args.lon, args.radius)
@@ -131,7 +131,6 @@ def main():
                     )
                     # Show nearby stations that were just outside the radius if location-based search was used
                     if args.lat is not None and args.lon is not None and args.radius is not None:
-                        from buoy_data import find_stations_by_location
                         # Search with 50% larger radius to show what's nearby
                         extended_radius = args.radius * 1.5
                         extended_stations = find_stations_by_location(args.lat, args.lon, extended_radius)
