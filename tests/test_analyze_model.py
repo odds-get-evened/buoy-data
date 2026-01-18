@@ -1,6 +1,7 @@
 # Small pytest suite to validate analyze_model() handles full and missing metric dicts.
 # These tests monkeypatch WaveHeightPredictor.load so no real model file is required.
 
+import logging
 import pandas as pd
 import pytest
 
@@ -39,7 +40,6 @@ def _full_metrics_predictor():
 def test_analyze_runs_with_full_metrics(monkeypatch, caplog):
     """analyze_model should run without errors and log expected entries when metrics are present."""
     # Set logging level for the analyze_model module logger
-    import logging
     caplog.set_level(logging.INFO, logger="analyze_model")
     
     monkeypatch.setattr(
@@ -60,7 +60,6 @@ def test_analyze_runs_with_full_metrics(monkeypatch, caplog):
 def test_analyze_handles_missing_metrics(monkeypatch, caplog):
     """analyze_model should not crash when metrics dict is empty or missing keys."""
     # Set logging level for the analyze_model module logger
-    import logging
     caplog.set_level(logging.WARNING, logger="analyze_model")
     
     monkeypatch.setattr(
