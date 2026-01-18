@@ -380,23 +380,30 @@ class BuoyForecaster:
             raise ValueError("No current data available for gradient analysis")
         
         # Prepare station data for gradient analysis
+        # Cache station lookups for efficiency
+        from ..station import Station
+        station_cache = {}
+        
         stations_data = []
         for idx, row in current_data.iterrows():
+            buoy_id = row['buoy_id']
+            
             station_dict = {
-                'station_id': row['buoy_id'],
+                'station_id': buoy_id,
                 'wave_height_m': row.get('wave_height_m'),
                 'latitude': None,
                 'longitude': None
             }
             
-            # Get station coordinates
+            # Get station coordinates from cache or create new Station object
             try:
-                from ..station import Station
-                station = Station(row['buoy_id'])
+                if buoy_id not in station_cache:
+                    station_cache[buoy_id] = Station(buoy_id)
+                station = station_cache[buoy_id]
                 station_dict['latitude'] = station.get_latitude()
                 station_dict['longitude'] = station.get_longitude()
             except (KeyError, AttributeError, ValueError, TypeError) as e:
-                logger.warning(f"Could not get coordinates for {row['buoy_id']}: {e}")
+                logger.warning(f"Could not get coordinates for {buoy_id}: {e}")
                 continue
             
             # Add wave period if available and energy calculation is requested

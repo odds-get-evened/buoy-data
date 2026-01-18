@@ -345,10 +345,12 @@ class FeatureEngineer:
                     weighted_avg = sum(h * w for h, w in zip(neighbor_heights, weights)) / total_weight
                     
                     # Calculate gradients to nearest neighbors
+                    # Note: distances are in km from calculate_distance() which returns km
+                    # So gradients are in meters of wave height per km of distance
                     gradients = []
                     for j, (dist, height) in enumerate(zip(distances, neighbor_heights)):
                         if dist > 0:  # Avoid division by zero
-                            gradient = (height - wave_heights[i]) / dist  # Wave height change per km
+                            gradient = (height - wave_heights[i]) / dist  # m/km
                             gradients.append(gradient)
                     
                     # Gradient statistics
