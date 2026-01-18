@@ -22,8 +22,20 @@ cd buoy-data
 pip install -e .
 ```
 
-### Using pip
+For ML features, install with the `ml` extras:
 
+```bash
+pip install -e ".[ml]"
+```
+
+### Using pip (with requirements files)
+
+Basic installation (core features only):
+```bash
+pip install -r requirements-core.txt
+```
+
+Full installation (including ML features):
 ```bash
 pip install -r requirements.txt
 ```
@@ -205,8 +217,15 @@ python examples.py
 
 ### Running Tests
 
+For core functionality tests:
 ```bash
 pip install -e ".[dev]"
+pytest tests/ --ignore=tests/test_analyze_model.py
+```
+
+For all tests (including ML):
+```bash
+pip install -e ".[dev,ml]"
 pytest tests/
 ```
 
